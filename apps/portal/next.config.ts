@@ -11,6 +11,10 @@ const supabaseHost = (() => {
 const nextConfig: NextConfig = {
   transpilePackages: ["@kmf/core", "@kmf/ui"],
   poweredByHeader: false,
+  experimental: {
+    // Logos (up to 2 MB) and Excel imports go through form actions.
+    serverActions: { bodySizeLimit: "3mb" },
+  },
   images: {
     // School logos and photos are served from Supabase Storage.
     remotePatterns: supabaseHost ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/public/**" }] : [],

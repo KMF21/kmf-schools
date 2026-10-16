@@ -87,6 +87,11 @@ export const getTenant = cache(async (): Promise<Tenant> => {
 
 export const CHOSEN_SCHOOL_COOKIE = "kmf_school";
 
+/** Drops cached lookups after a school's details change, so this server shows them at once. */
+export function forgetSchool(schoolId: string): void {
+  for (const [key, value] of memo) if (value.school?.id === schoolId) memo.delete(key);
+}
+
 export async function findSchoolBySlug(slug: string): Promise<School | null> {
   if (IS_DEMO) return slug === DEMO_SCHOOL.slug ? DEMO_SCHOOL : null;
   return lookup(`slug:${slug}`, { p_slug: slug });

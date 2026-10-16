@@ -21,7 +21,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   return (
     <PortalShell
       school={school}
-      viewer={{ name: viewer.name, roleLabel: ROLE_LABELS[viewer.role] }}
+      viewer={{ name: viewer.name, roleLabel: viewer.isPlatformAdmin ? "KMF admin" : ROLE_LABELS[viewer.role] }}
       nav={nav}
       termLabel={term ? `${term.name}, ${term.session}` : null}
       isDemo={IS_DEMO}

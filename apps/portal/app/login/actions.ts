@@ -39,14 +39,12 @@ export async function signIn(_prev: LoginState, form: FormData): Promise<LoginSt
     };
   }
 
-  // An account only works at the schools it belongs to.
-  const { data: membership } = await supabase
-    .from("school_members")
-    .select("id")
-    .eq("school_id", school.id)
-    .eq("user_id", data.user.id)
-    .limit(1);
-  if (!membership || membership.length === 0) {
+  // An account only works at the schools it belongs to (KMF admins work everywhere).
+  const [{ data: membership }, { data: platform }] = await Promise.all([
+    supabase.from("school_members").select("id").eq("school_id", school.id).eq("user_id", data.user.id).limit(1),
+    supabase.from("platform_admins").select("user_id").eq("user_id", data.user.id).maybeSingle(),
+  ]);
+  if ((!membership || membership.length === 0) && !platform) {
     await supabase.auth.signOut();
     return { identifier, error: `This account isn't registered at ${school.name}. Contact the school office.` };
   }
