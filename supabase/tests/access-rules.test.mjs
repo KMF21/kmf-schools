@@ -6,9 +6,9 @@ const db = new PGlite();
 
 // Minimal stand-in for Supabase's auth schema and roles.
 await db.exec(`
-  create role anon nologin; create role authenticated nologin;
+  create role anon nologin; create role authenticated nologin; create role service_role nologin;
   create schema auth;
-  create table auth.users (id uuid primary key);
+  create table auth.users (id uuid primary key, email text);
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to anon, authenticated;
@@ -191,6 +191,11 @@ await db.exec(`delete from public.platform_admins where user_id = '${u(5)}'`);
 await as(u(5), async () => {
   check("person with no membership sees nothing", await count("select count(*) n from public.students"), 0);
 });
+
+check("signed-in users cannot look up accounts by email", await (async () => {
+  await db.exec(`set role authenticated`);
+  try { await db.exec(`select public.auth_user_id_by_email('x@y.z')`); return false; } catch { return true; } finally { await db.exec("reset role"); }
+})(), true);
 
 await as(null, async () => {
   check("signed-out visitor resolves school by slug", await names("select name from public.resolve_school(null, 'brightfield')"), ["Brightfield Academy"]);

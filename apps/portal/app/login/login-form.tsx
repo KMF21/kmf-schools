@@ -18,7 +18,7 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      <Field label="Email or admission number" htmlFor="identifier" hint="Staff: email. Students and parents: number on the login slip.">
+      <Field label="Email, admission number or phone" htmlFor="identifier" hint="Students: admission number. Parents: phone number. Staff: email.">
         <Input
           id="identifier"
           name="identifier"

@@ -4,3 +4,10 @@
 @source "../../../packages/ui/src";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Printing login slips: only the print copy (a direct child of body) is printed. */
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body:has(> .print-portal) { background: #fff !important; }
+  body:has(> .print-portal) > :not(.print-portal) { display: none !important; }
+}

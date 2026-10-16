@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isRole, resolveLoginIdentifier } from "@kmf/core";
+import { isRole, loginCandidates } from "@kmf/core";
 import { IS_DEMO } from "@/lib/env";
 import { DEMO_ROLE_COOKIE } from "@/lib/demo";
 import { supabaseForRequest } from "@/lib/supabase";
@@ -12,7 +12,7 @@ import { getTenant } from "@/lib/tenant";
 export type LoginState = { error?: string; identifier?: string };
 
 const schema = z.object({
-  identifier: z.string().trim().min(1, "Enter your email or admission number.").max(200),
+  identifier: z.string().trim().min(1, "Enter your email, admission number or phone number.").max(200),
   password: z.string().min(1, "Enter your password.").max(200),
 });
 
@@ -26,8 +26,14 @@ export async function signIn(_prev: LoginState, form: FormData): Promise<LoginSt
   if (!parsed.success) return { error: parsed.error.issues[0]?.message, identifier };
 
   const supabase = await supabaseForRequest();
-  const { email } = resolveLoginIdentifier(parsed.data.identifier, school.id);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: parsed.data.password });
+  // An all-digit entry could be an admission number or a phone number, so try each.
+  let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"] = { user: null, session: null };
+  let error: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["error"] = null;
+  for (const email of loginCandidates(parsed.data.identifier, school.id)) {
+    ({ data, error } = await supabase.auth.signInWithPassword({ email, password: parsed.data.password }));
+    if (!error && data.user) break;
+    if (error?.status === 429) break;
+  }
 
   if (error || !data.user) {
     const tooMany = error?.status === 429;
@@ -35,7 +41,7 @@ export async function signIn(_prev: LoginState, form: FormData): Promise<LoginSt
       identifier,
       error: tooMany
         ? "Too many sign-in attempts. Wait a few minutes, then try again."
-        : "That email or admission number and password don't match. Check both and try again.",
+        : "Those sign-in details don't match. Check your email, admission number or phone number, and your password.",
     };
   }
 

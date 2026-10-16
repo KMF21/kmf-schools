@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -26,6 +27,7 @@ const ICONS = {
   students: GraduationCap,
   classes: BookOpen,
   staff: Users,
+  logins: KeyRound,
   announcements: Megaphone,
   settings: Settings,
 } as const;
@@ -110,10 +112,10 @@ export function PortalShell({
           <span aria-hidden className="grid size-[38px] shrink-0 place-items-center rounded-full bg-white text-sm font-bold text-[var(--brand)]">
             {initials(viewer.name)}
           </span>
-          <div className="min-w-0 flex-1">
+          <Link href="/account" className="min-w-0 flex-1 rounded-md outline-offset-4 hover:underline" title="My account">
             <p className="truncate text-sm font-bold">{viewer.name}</p>
             <p className="truncate text-xs text-white/75">{viewer.roleLabel}</p>
-          </div>
+          </Link>
           <form action={signOut}>
             <button type="submit" className="grid size-9 place-items-center rounded-full text-white/85 hover:bg-white/15 hover:text-white" aria-label="Sign out" title="Sign out">
               <LogOut className="size-[1.0625rem]" aria-hidden />

@@ -7,7 +7,7 @@ import { supabaseForRequest } from "./supabase";
 
 export type StaffRow = { id: string; title: string | null; firstName: string; lastName: string; email: string | null; phone: string | null; position: string | null; isActive: boolean };
 
-export type Guardian = { id: string; fullName: string; phone: string | null; email: string | null; relationship: string | null };
+export type Guardian = { id: string; fullName: string; phone: string | null; email: string | null; relationship: string | null; hasLogin?: boolean };
 
 export type StudentDetail = {
   id: string;
@@ -122,7 +122,7 @@ export async function getStudent(school: School, id: string): Promise<StudentDet
       dateOfBirth: null,
       classArmId: armId,
       status: "active",
-      guardians: [{ id: "demo-guardian", fullName: `Mr ${rest.join(" ")}`, phone: "08030000000", email: null, relationship: "Father" }],
+      guardians: [{ id: "demo-guardian", fullName: `Mr ${rest.join(" ")}`, phone: "08030000000", email: null, relationship: "Father", hasLogin: true }],
     };
   }
 
@@ -134,7 +134,7 @@ export async function getStudent(school: School, id: string): Promise<StudentDet
       .eq("school_id", school.id)
       .eq("id", id)
       .maybeSingle(),
-    supabase.from("student_guardians").select("relationship, guardians(id, full_name, phone, email)").eq("school_id", school.id).eq("student_id", id),
+    supabase.from("student_guardians").select("relationship, guardians(id, full_name, phone, email, user_id)").eq("school_id", school.id).eq("student_id", id),
   ]);
   if (student.error) fail("student", student.error);
   if (links.error) fail("parents", links.error);
@@ -151,8 +151,8 @@ export async function getStudent(school: School, id: string): Promise<StudentDet
     classArmId: s.class_arm_id,
     status: s.status,
     guardians: (links.data ?? []).flatMap((l) => {
-      const g = l.guardians as unknown as { id: string; full_name: string; phone: string | null; email: string | null } | null;
-      return g ? [{ id: g.id, fullName: g.full_name, phone: g.phone, email: g.email, relationship: l.relationship }] : [];
+      const g = l.guardians as unknown as { id: string; full_name: string; phone: string | null; email: string | null; user_id: string | null } | null;
+      return g ? [{ id: g.id, fullName: g.full_name, phone: g.phone, email: g.email, relationship: l.relationship, hasLogin: Boolean(g.user_id) }] : [];
     }),
   };
 }

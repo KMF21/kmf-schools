@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classifyHost, normalizeHostname } from "./tenant";
 import { brandPalette, contrastRatio, parseHex } from "./color";
 import { BASIC_SCALE, WAEC_SCALE, gradeFor, validateScale } from "./curriculum";
-import { internalLoginEmail, resolveLoginIdentifier } from "./identity";
+import { displayLogin, generatePassword, loginCandidates, phoneLoginEmail, studentLoginEmail } from "./identity";
 import { can } from "./roles";
 
 const ROOT = "kmfschools.ng";
@@ -82,17 +82,35 @@ describe("login identifiers", () => {
   const schoolId = "11111111-2222-3333-4444-555555555555";
 
   it("maps admission numbers to a private school-scoped address", () => {
-    expect(internalLoginEmail(" KMF/2024/017 ", schoolId)).toBe(
-      `kmf-2024-017@${schoolId}.accounts.kmfschools.ng`,
-    );
+    expect(studentLoginEmail(" KMF/2024/017 ", schoolId)).toBe(`s-kmf-2024-017@${schoolId}.accounts.kmfschools.ng`);
   });
 
   it("keeps the same admission number separate across schools", () => {
-    expect(internalLoginEmail("001", schoolId)).not.toBe(internalLoginEmail("001", "another-school"));
+    expect(studentLoginEmail("001", schoolId)).not.toBe(studentLoginEmail("001", "another-school"));
   });
 
-  it("passes emails through", () => {
-    expect(resolveLoginIdentifier("Head@School.ng", schoolId)).toEqual({ email: "head@school.ng", kind: "email" });
+  it("treats every way of writing a Nigerian phone number as one login", () => {
+    const a = phoneLoginEmail("08031234567", schoolId);
+    for (const p of ["+234 803 123 4567", "2348031234567", "0803-123-4567", "8031234567"]) expect(phoneLoginEmail(p, schoolId)).toBe(a);
+  });
+
+  it("tries the right accounts for what someone typed", () => {
+    expect(loginCandidates("Head@School.ng", schoolId)).toEqual(["head@school.ng"]);
+    expect(loginCandidates("BFA/2026/014", schoolId)).toEqual([studentLoginEmail("BFA/2026/014", schoolId)]);
+    // Looks like a phone, but could also be an all-digit admission number: try both.
+    expect(loginCandidates("0803 123 4567", schoolId)).toEqual([studentLoginEmail("0803 123 4567", schoolId), phoneLoginEmail("08031234567", schoolId)]);
+  });
+
+  it("shows people what to type, not the private address", () => {
+    expect(displayLogin(studentLoginEmail("BFA/2026/014", schoolId))).toBe("bfa-2026-014");
+    expect(displayLogin(phoneLoginEmail("08031234567", schoolId))).toBe("08031234567");
+    expect(displayLogin("head@school.ng")).toBe("head@school.ng");
+  });
+
+  it("makes readable passwords without look-alike characters", () => {
+    const pw = generatePassword();
+    expect(pw).toMatch(/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+    expect(new Set(Array.from({ length: 50 }, () => generatePassword())).size).toBe(50);
   });
 });
 
