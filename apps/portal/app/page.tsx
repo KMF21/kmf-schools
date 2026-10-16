@@ -76,6 +76,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
           ) : null}
           {IS_DEMO ? <p className="mt-6 text-sm text-white/70">Running in demo mode with sample data.</p> : null}
         </section>
+        <footer className="pb-2 text-center text-xs text-white/60">
+          © KMF Enterprise, Jalingo ·{" "}
+          <a href="/admin" className="underline-offset-4 hover:text-white hover:underline">
+            KMF staff
+          </a>
+        </footer>
       </div>
     </main>
   );

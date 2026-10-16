@@ -13,6 +13,7 @@ import {
   Megaphone,
   Menu,
   Settings,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const ICONS = {
   logins: KeyRound,
   announcements: Megaphone,
   settings: Settings,
+  kmf: ShieldCheck,
 } as const;
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { MANAGER_ROLES, ROLES, type Role, type School } from "@kmf/core";
+import { MANAGER_ROLES, ROLES, displayLogin, type Role, type School } from "@kmf/core";
 import { IS_DEMO } from "./env";
 import { DEMO_PEOPLE, DEMO_ROLE_COOKIE, demoRole } from "./demo";
 import { supabaseForRequest } from "./supabase";
@@ -11,6 +11,8 @@ export type Viewer = {
   userId: string;
   name: string;
   email: string | null;
+  /** What this person types to sign in: email, admission number or phone. */
+  login: string | null;
   /** The role this page is shown in. */
   role: Role;
   /** All roles this person holds at this school (e.g. a teacher who is also a parent). */
@@ -37,7 +39,7 @@ export const getViewer = cache(async (school: School): Promise<Viewer | null> =>
     const role = demoRole((await cookies()).get(DEMO_ROLE_COOKIE)?.value);
     if (!role) return null;
     const person = DEMO_PEOPLE[role];
-    return { userId: `demo-${role}`, name: person.name, email: person.email || null, role, roles: [role], isPlatformAdmin: false };
+    return { userId: `demo-${role}`, name: person.name, email: person.email || null, login: person.email || null, role, roles: [role], isPlatformAdmin: false };
   }
 
   const supabase = await supabaseForRequest();
@@ -65,6 +67,7 @@ export const getViewer = cache(async (school: School): Promise<Viewer | null> =>
     userId,
     name: rows[0]?.display_name ?? "KMF support",
     email,
+    login: rawEmail ? displayLogin(rawEmail) : null,
     role: roles[0]!,
     roles: isPlatformAdmin && !roles.includes("admin") ? rank([...roles, "admin"]) : roles,
     isPlatformAdmin,

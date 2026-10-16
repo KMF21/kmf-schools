@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ROLE_LABELS, displayLogin } from "@kmf/core";
+import { ROLE_LABELS } from "@kmf/core";
 import { Card, CardHeader } from "@kmf/ui";
 import { requireViewer } from "@/lib/session";
 import { PasswordForm } from "./password-form";
@@ -18,7 +18,7 @@ export default async function AccountPage() {
           <dt className="text-ink-muted">Name</dt>
           <dd className="font-bold">{viewer.name}</dd>
           <dt className="text-ink-muted">Signs in with</dt>
-          <dd className="break-all font-bold">{viewer.email ? displayLogin(viewer.email) : "Not available"}</dd>
+          <dd className="break-all font-bold">{viewer.login ?? "Not available"}</dd>
           <dt className="text-ink-muted">Access</dt>
           <dd className="font-bold">{roles}</dd>
         </dl>

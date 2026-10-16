@@ -60,6 +60,12 @@ Tools for adding schools, staff and students from the portal itself come in the 
 
 To connect a school's own domain: the school adds a DNS record pointing to Vercel, KMF adds the domain to the Vercel project, then adds a row to `school_domains`.
 
+## KMF admin area
+
+KMF staff sign in at `/admin` on a platform address (kmfschools.ng, the Vercel link, or localhost), never on a school's own domain. Only accounts listed in `platform_admins` get in. From there you can set up a school and its proprietor's login, change a school's status (setting up, live, suspended), connect its own domains, and open any school's portal.
+
+Creating logins needs `SUPABASE_SECRET_KEY` on the server (see `apps/portal/.env.example`).
+
 ## Security model
 
 - Every school-owned table has a `school_id`, and composite foreign keys stop any record from linking to another school's records.

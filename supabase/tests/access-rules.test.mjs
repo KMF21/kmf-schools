@@ -186,6 +186,18 @@ await as(u(1), async () => {
   try { await db.exec(`insert into public.schools (slug, name) values ('rogue', 'Rogue School')`); } catch { refused = true; }
   check("school admin cannot create a school", refused, true);
 });
+await as(u(1), async () => {
+  check("school admin cannot switch their school's status", await refusedTo(`update public.schools set status = 'suspended' where id = '${A}'`), true);
+  check("school admin cannot change their school's web name", await refusedTo(`update public.schools set slug = 'renamed' where id = '${A}'`), true);
+  check("school admin can still rename their school", await refusedTo(`update public.schools set motto = 'Learning for life' where id = '${A}'`), false);
+  check("school admin cannot connect a domain", await refusedTo(`insert into public.school_domains (hostname, school_id) values ('portal.brightfield.com.ng', '${A}')`), true);
+});
+await as(u(5), async () => {
+  check("KMF admin sees every school", await count("select count(*) n from public.schools"), 3);
+  check("KMF admin can change a school's status", await refusedTo(`update public.schools set status = 'setup' where id = '${B}'`), false);
+  await db.exec(`update public.schools set status = 'active' where id = '${B}'`);
+  check("KMF admin can connect a domain", await refusedTo(`insert into public.school_domains (hostname, school_id, kind) values ('www.brightfield.com.ng', '${A}', 'website')`), false);
+});
 await db.exec(`delete from public.platform_admins where user_id = '${u(5)}'`);
 
 await as(u(5), async () => {

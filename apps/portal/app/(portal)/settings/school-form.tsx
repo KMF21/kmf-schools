@@ -7,7 +7,7 @@ import { FieldError, FormMessage, SubmitButton } from "@/components/form-bits";
 import type { ActionState } from "@/lib/actions";
 import { saveSchoolDetails } from "./actions";
 
-const PRESETS = [
+export const PRESETS = [
   { hex: "#1a8754", name: "Green" },
   { hex: "#1d4ed8", name: "Royal blue" },
   { hex: "#0f2c5c", name: "Navy" },

@@ -4,6 +4,7 @@ import { PortalShell, type NavItem } from "@/components/portal-shell";
 import { getCurrentTerm } from "@/lib/data";
 import { IS_DEMO } from "@/lib/env";
 import { requireViewer } from "@/lib/session";
+import { getTenant } from "@/lib/tenant";
 
 const NAV: Array<NavItem & { roles: readonly Role[] }> = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", roles: ["owner", "admin", "teacher", "bursar", "parent", "student"] },
@@ -18,7 +19,10 @@ const NAV: Array<NavItem & { roles: readonly Role[] }> = [
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const { school, viewer } = await requireViewer();
   const term = await getCurrentTerm(school);
-  const nav = NAV.filter((n) => n.roles.some((r) => viewer.roles.includes(r))).map(({ href, label, icon }) => ({ href, label, icon }));
+  const nav: NavItem[] = NAV.filter((n) => n.roles.some((r) => viewer.roles.includes(r))).map(({ href, label, icon }) => ({ href, label, icon }));
+  // KMF admins on a platform address can go back to the list of all schools.
+  const tenant = await getTenant();
+  if (viewer.isPlatformAdmin && tenant.kind === "school" && tenant.chosenByPath) nav.push({ href: "/admin", label: "All schools (KMF)", icon: "kmf" });
 
   return (
     <PortalShell

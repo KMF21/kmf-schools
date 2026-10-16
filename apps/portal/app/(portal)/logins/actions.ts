@@ -5,6 +5,7 @@ import { z } from "zod";
 import { displayLogin, generatePassword, normalizePhone, phoneLoginEmail, studentLoginEmail, type Role } from "@kmf/core";
 import { managerContext, friendly, type ActionState } from "@/lib/actions";
 import { ADMIN_MISSING_MESSAGE, adminClient } from "@/lib/admin";
+import { addMembership, ensureAccount, type Admin } from "@/lib/accounts";
 import { getArmOptions } from "@/lib/people";
 
 /* Credentials are returned once, to the manager who created them, and never stored or logged. */
@@ -13,26 +14,6 @@ export type BatchResult = ActionState & { credentials?: Credential[]; remaining?
 
 export type LoginKind = "students" | "parents" | "staff";
 const BATCH = 25;
-
-type Admin = NonNullable<ReturnType<typeof adminClient>>;
-
-/** Creates the account, or finds it if this person already has one (a teacher who is also a parent). */
-async function ensureAccount(admin: Admin, email: string, password: string, meta: Record<string, string>): Promise<{ userId: string; created: boolean }> {
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: meta });
-  if (!error && data.user) return { userId: data.user.id, created: true };
-  if (error && (error.code === "email_exists" || error.code === "user_already_exists" || error.status === 422)) {
-    const { data: existing } = await admin.rpc("auth_user_id_by_email", { p_email: email } as never);
-    if (typeof existing === "string") return { userId: existing, created: false };
-  }
-  throw new Error(error?.message ?? "Account could not be created");
-}
-
-async function addMembership(admin: Admin, schoolId: string, userId: string, role: Role, displayName: string) {
-  const { error } = await admin
-    .from("school_members")
-    .upsert({ school_id: schoolId, user_id: userId, role, display_name: displayName } as never, { onConflict: "school_id,user_id,role", ignoreDuplicates: true });
-  if (error) throw new Error(error.message);
-}
 
 export async function createLogins(kind: LoginKind): Promise<BatchResult> {
   const access = await managerContext();
