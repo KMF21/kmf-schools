@@ -15,7 +15,15 @@ import { LoginForm } from "./login-form";
 export const metadata: Metadata = { title: "Sign in" };
 
 const DEMO_ROLES: Role[] = ["admin", "teacher", "parent", "student"];
+const DEMO_SHORT: Partial<Record<Role, string>> = { admin: "Admin" };
 
+const DOTS = { backgroundImage: "radial-gradient(currentColor 1px, transparent 1.2px)", backgroundSize: "20px 20px" };
+
+/*
+ * Layout goal: everything fits on the first screen, from a 360×740 phone to a
+ * 1280×720 laptop. Scrolling is still allowed, because a phone keyboard covers
+ * half the screen and some people use larger text; nothing is cut off then.
+ */
 export default async function LoginPage() {
   const school = await requireSchool();
   if (await getViewer(school)) redirect("/dashboard");
@@ -23,29 +31,24 @@ export default async function LoginPage() {
   const chosenByPath = tenant.kind === "school" && tenant.chosenByPath;
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-      {/* School panel */}
-      <section className="relative overflow-hidden bg-brand px-6 pt-8 pb-10 text-brand-on sm:px-10 lg:flex lg:min-h-dvh lg:flex-col lg:px-14 lg:py-12">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.1]"
-          style={{ backgroundImage: "radial-gradient(currentColor 1px, transparent 1.2px)", backgroundSize: "20px 20px" }}
-        />
-        <div aria-hidden className="pointer-events-none absolute -right-24 -bottom-32 size-[26rem] rounded-full border-[3.5rem] border-white/8" />
+    <div className="flex min-h-dvh flex-col lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      {/* School panel: a short band on phones and tablets, a full panel on laptops */}
+      <section className="relative overflow-hidden bg-brand text-brand-on lg:flex lg:min-h-dvh lg:flex-col lg:px-14 lg:py-12">
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.1]" style={DOTS} />
+        <div aria-hidden className="pointer-events-none absolute -right-24 -bottom-32 hidden size-[26rem] rounded-full border-[3.5rem] border-white/8 lg:block" />
 
-        <div className="relative flex items-center gap-3">
-          <SchoolMark school={school} inverted size={52} />
-          <div className="min-w-0">
-            <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold">{school.name}</p>
-            {school.address ? <p className="truncate text-sm text-white/75">{school.address}</p> : null}
+        <div className="relative flex items-center gap-3 px-4 py-4 sm:px-8 lg:p-0">
+          <SchoolMark school={school} inverted size={48} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-[family-name:var(--font-display)] text-[1.0625rem] font-bold lg:text-lg">{school.name}</p>
+            {school.address ? <p className="truncate text-xs text-white/75 lg:text-sm">{school.address}</p> : null}
           </div>
+          <ThemeToggle className="grid size-10 shrink-0 place-items-center rounded-full text-white/85 hover:bg-white/15 hover:text-white lg:hidden" />
         </div>
 
-        <div className="relative mt-10 max-w-xl lg:mt-auto">
-          <h1 className="text-[2rem] leading-[1.12] text-white sm:text-[2.6rem] lg:text-[3.1rem]">
-            {school.motto ?? "Welcome to your school portal"}
-          </h1>
-          <ul className="mt-8 hidden gap-3 sm:grid">
+        <div className="relative mt-auto hidden max-w-xl lg:block">
+          <h1 className="text-[2.6rem] leading-[1.12] text-white xl:text-[3.1rem]">{school.motto ?? "Welcome to your school portal"}</h1>
+          <ul className="mt-8 grid gap-3">
             {[
               { icon: BookOpenCheck, text: "Check results and download report cards" },
               { icon: Megaphone, text: "See school news and announcements" },
@@ -60,42 +63,43 @@ export default async function LoginPage() {
             ))}
           </ul>
         </div>
-        <p className="relative mt-10 hidden text-xs text-white/60 lg:block lg:mt-16">Powered by KMF Schools</p>
+        <p className="relative mt-12 hidden text-xs text-white/60 lg:block">Powered by KMF Schools</p>
       </section>
 
-      {/* Sign-in form */}
-      <section className="relative flex items-start justify-center px-4 py-8 sm:px-8 lg:items-center lg:py-12">
-        <ThemeToggle className="absolute top-4 right-4 grid size-10 place-items-center rounded-full text-ink-muted hover:bg-surface hover:text-ink" />
+      {/* Sign-in */}
+      <section className="relative flex flex-1 flex-col items-center px-4 pt-5 pb-6 sm:px-8 sm:pt-10 lg:justify-center lg:py-8">
+        <ThemeToggle className="absolute top-4 right-4 hidden size-10 place-items-center rounded-full text-ink-muted hover:bg-surface hover:text-ink lg:grid" />
         <div className="w-full max-w-md">
-          <Card className="-mt-14 p-6 sm:p-8 lg:mt-0">
-            <h2 className="text-2xl">Sign in</h2>
-            <p className="mt-1 mb-6 text-sm text-ink-muted">Use the details the school gave you.</p>
+          <Card className="p-5 sm:p-7">
+            <h1 className="text-[1.375rem] lg:text-2xl">Sign in</h1>
+            <p className="mt-0.5 mb-4 text-sm text-ink-muted">Use the details the school gave you.</p>
             <LoginForm />
+
+            {IS_DEMO ? (
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="text-sm font-bold text-ink">
+                  Explore the demo as <span className="font-normal text-ink-muted">(sample data)</span>
+                </p>
+                <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                  {DEMO_ROLES.map((role) => (
+                    <form key={role} action={signInAsDemo}>
+                      <input type="hidden" name="role" value={role} />
+                      <button
+                        type="submit"
+                        title={`${ROLE_LABELS[role]}: ${DEMO_PEOPLE[role].name}`}
+                        className="h-10 w-full rounded-full border border-line bg-surface-sunk px-2 text-[0.8125rem] font-bold text-ink transition-colors hover:border-brand hover:bg-brand-wash hover:text-brand-text"
+                      >
+                        {DEMO_SHORT[role] ?? ROLE_LABELS[role]}
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </Card>
 
-          {IS_DEMO ? (
-            <Card className="mt-5 p-5">
-              <h2 className="text-base">Explore the demo</h2>
-              <p className="mt-1 text-sm text-ink-muted">This is sample data. Pick a person to see the portal as they would.</p>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {DEMO_ROLES.map((role) => (
-                  <form key={role} action={signInAsDemo}>
-                    <input type="hidden" name="role" value={role} />
-                    <button
-                      type="submit"
-                      className="w-full rounded-[var(--radius-control)] border border-line bg-surface-sunk px-3 py-2.5 text-left transition-colors hover:border-brand hover:bg-brand-wash"
-                    >
-                      <span className="block text-sm font-bold text-ink">{ROLE_LABELS[role]}</span>
-                      <span className="block truncate text-xs text-ink-muted">{DEMO_PEOPLE[role].name}</span>
-                    </button>
-                  </form>
-                ))}
-              </div>
-            </Card>
-          ) : null}
-
           {chosenByPath ? (
-            <p className="mt-5 text-center text-sm text-ink-muted">
+            <p className="mt-4 text-center text-sm text-ink-muted">
               Not your school?{" "}
               <a href="/leave-school" className="font-bold text-brand-text underline-offset-4 hover:underline">
                 Back to KMF Schools

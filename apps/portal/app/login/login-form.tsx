@@ -11,14 +11,14 @@ export function LoginForm() {
   const error = state.error;
 
   return (
-    <form action={action} className="space-y-5" noValidate>
+    <form action={action} className="space-y-4" noValidate>
       {error ? (
         <p role="alert" className="rounded-[var(--radius-control)] border border-bad/25 bg-bad-soft px-4 py-3 text-sm font-semibold text-bad">
           {error}
         </p>
       ) : null}
 
-      <Field label="Email or admission number" htmlFor="identifier" hint="Staff use their email. Students and parents use the number on their login slip.">
+      <Field label="Email or admission number" htmlFor="identifier" hint="Staff: email. Students and parents: number on the login slip.">
         <Input
           id="identifier"
           name="identifier"
@@ -61,7 +61,7 @@ export function LoginForm() {
         {pending ? "Signing in" : "Sign in"}
       </Button>
 
-      <p className="text-center text-sm text-ink-muted">Forgot your password? Ask the school office to reset it.</p>
+      <p className="text-center text-[0.8125rem] text-ink-muted">Forgot your password? Ask the school office to reset it.</p>
     </form>
   );
 }
