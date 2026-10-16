@@ -7,6 +7,7 @@ import { supabaseForRequest } from "./supabase";
 /* ------------------------------------------------------------------ Types */
 
 export type CurrentTerm = {
+  number: number;
   name: string;
   session: string;
   startsOn: string | null;
@@ -58,12 +59,12 @@ function demoStructure(): StructureSection[] {
 
 export const getCurrentTerm = cache(async (school: School): Promise<CurrentTerm> => {
   if (IS_DEMO) {
-    return { name: "First term", session: "2026/2027", startsOn: "2026-09-14", endsOn: "2026-12-11", nextTermBegins: "2027-01-11" };
+    return { number: 1, name: "First term", session: "2026/2027", startsOn: "2026-09-14", endsOn: "2026-12-11", nextTermBegins: "2027-01-11" };
   }
   const supabase = await supabaseForRequest();
   const { data, error } = await supabase
     .from("terms")
-    .select("name, starts_on, ends_on, next_term_begins, academic_sessions(name)")
+    .select("term_number, name, starts_on, ends_on, next_term_begins, academic_sessions(name)")
     .eq("school_id", school.id)
     .eq("is_current", true)
     .maybeSingle();
@@ -71,6 +72,7 @@ export const getCurrentTerm = cache(async (school: School): Promise<CurrentTerm>
   if (!data) return null;
   const session = data.academic_sessions as unknown as { name: string } | null;
   return {
+    number: data.term_number,
     name: data.name,
     session: session?.name ?? "",
     startsOn: data.starts_on,

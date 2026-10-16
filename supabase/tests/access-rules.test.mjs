@@ -103,6 +103,49 @@ await as(u(6), async () => {
   check("student sees only themselves", await names("select first_name from public.students"), ["Bello"]);
 });
 
+// Structure tools: adding a section and setting the current term.
+const setupSql = (school) => `select public.setup_section('${school}', 'junior_secondary', 'Junior Secondary', 'score',
+  array['JSS 1','JSS 2'], array['A','B'], array['Mathematics','English Studies'],
+  '{"Science": ["Basic Science"]}'::jsonb,
+  '[{"name":"CA 1","maxScore":40},{"name":"Exam","maxScore":60}]'::jsonb,
+  'Standard scale', '[{"min":0,"max":100,"grade":"P","remark":"Pass"}]'::jsonb)`;
+const refusedTo = async (sql) => { try { await db.exec(sql); return false; } catch { return true; } };
+
+await as(u(4), async () => {
+  await db.exec(setupSql(B));
+  check("admin adds a section with its classes in one step", await count(`select count(*) n from public.class_levels where school_id = '${B}'`), 2);
+  check("each class gets its arms", await count(`select count(*) n from public.class_arms where school_id = '${B}'`), 4);
+  check("each class gets core and elective subjects", await count(`select count(*) n from public.class_subjects where school_id = '${B}'`), 6);
+  check("the section gets its CA/exam components and grading scale",
+    await count(`select (select count(*) from public.assessment_components where school_id = '${B}') + (select count(*) from public.grading_scales where school_id = '${B}') as n`), 3);
+  check("adding the same section twice is refused, leaving nothing half-done", await refusedTo(setupSql(B)), true);
+  check("one admin cannot add sections to another school", await refusedTo(setupSql(A)), true);
+
+  await db.exec(`select public.set_current_term('${B}', '2026/2027', 1::smallint, '2026-09-14', '2026-12-11', '2027-01-11')`);
+  await db.exec(`select public.set_current_term('${B}', '2026/2027', 2::smallint, '2027-01-11', '2027-04-02', '2027-04-26')`);
+  check("exactly one current term after changing it", await names(`select name from public.terms where school_id = '${B}' and is_current`), ["Second term"]);
+  const sec = (await db.query(`select id from public.sections where school_id = '${B}'`)).rows[0].id;
+  const comps = (await db.query(`select id, name from public.assessment_components where section_id = '${sec}' order by sort_order`)).rows;
+  const bandsJson = `'[{"min":50,"max":100,"grade":"P","remark":"Pass"},{"min":0,"max":49,"grade":"F","remark":"Fail"}]'::jsonb`;
+  // Swap the names of the two components and add a third, totalling 100.
+  await db.exec(`select public.save_grading('${sec}', '[{"id":"${comps[0].id}","name":"Exam","maxScore":50},{"id":"${comps[1].id}","name":"CA 1","maxScore":30},{"id":null,"name":"Project","maxScore":20}]'::jsonb, 'My scale', ${bandsJson})`);
+  check("grading save renames, reorders and adds in one step",
+    (await db.query(`select name from public.assessment_components where section_id = '${sec}' order by sort_order`)).rows.map((r) => r.name), ["Exam", "CA 1", "Project"]);
+  check("grading save stores the new scale", await names(`select name from public.grading_scales where section_id = '${sec}'`), ["My scale"]);
+  check("grading that doesn't total 100 is refused",
+    await refusedTo(`select public.save_grading('${sec}', '[{"id":null,"name":"Exam","maxScore":90}]'::jsonb, 'x', ${bandsJson})`), true);
+  check("a refused grading save changes nothing", await count(`select count(*) n from public.assessment_components where section_id = '${sec}'`), 3);
+  const aSection = (await db.query(`select id from public.sections where school_id = '${A}' and assessment_style = 'score' limit 1`)).rows[0]?.id;
+  check("one admin cannot change another school's grading", await refusedTo(`select public.save_grading('${aSection}', '[{"id":null,"name":"Exam","maxScore":100}]'::jsonb, 'x', ${bandsJson})`), true);
+
+  check("changing the term doesn't touch other schools", await names(`select name from public.terms where school_id = '${A}' and is_current`), []);
+});
+check("other school's current term is unchanged", await names(`select name from public.terms where school_id = '${A}' and is_current`), ["First term"]);
+await as(u(2), async () => {
+  check("teachers cannot add sections", await refusedTo(setupSql(A)), true);
+  check("teachers cannot change the term", await refusedTo(`select public.set_current_term('${A}', '2026/2027', 2::smallint, null, null, null)`), true);
+});
+
 await db.exec(`insert into public.platform_admins (user_id) values ('${u(5)}')`);
 await as(u(5), async () => {
   const made = await db.query(`insert into public.schools (slug, name) values ('newschool', 'New School') returning id`);
