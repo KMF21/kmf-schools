@@ -111,6 +111,9 @@ const setupSql = (school) => `select public.setup_section('${school}', 'junior_s
   'Standard scale', '[{"min":0,"max":100,"grade":"P","remark":"Pass"}]'::jsonb)`;
 const refusedTo = async (sql) => { try { await db.exec(sql); return false; } catch { return true; } };
 
+// Looked up outside any session: school B's admin can't see school A's classes.
+const aArm = (await db.query(`select id from public.class_arms where school_id = '${A}' limit 1`)).rows[0].id;
+
 await as(u(4), async () => {
   await db.exec(setupSql(B));
   check("admin adds a section with its classes in one step", await count(`select count(*) n from public.class_levels where school_id = '${B}'`), 2);
@@ -137,6 +140,33 @@ await as(u(4), async () => {
   check("a refused grading save changes nothing", await count(`select count(*) n from public.assessment_components where section_id = '${sec}'`), 3);
   const aSection = (await db.query(`select id from public.sections where school_id = '${A}' and assessment_style = 'score' limit 1`)).rows[0]?.id;
   check("one admin cannot change another school's grading", await refusedTo(`select public.save_grading('${aSection}', '[{"id":null,"name":"Exam","maxScore":100}]'::jsonb, 'x', ${bandsJson})`), true);
+
+  // Imports
+  const arm = (await db.query(`select id from public.class_arms where school_id = '${B}' limit 1`)).rows[0].id;
+  const studentsJson = (rows) => `'${JSON.stringify(rows).replace(/'/g, "''")}'::jsonb`;
+  const res = (await db.query(`select public.import_students('${B}', ${studentsJson([
+    { admission_no: "HC/100", first_name: "Ngozi", last_name: "Eze", gender: "female", date_of_birth: "2014-04-03", class_arm_id: arm, guardian_name: "Mrs Eze", guardian_phone: "08030000001" },
+    { admission_no: "HC/101", first_name: "Obi", last_name: "Eze", gender: "male", class_arm_id: arm, guardian_name: "Mrs Eze", guardian_phone: "08030000001" },
+    { admission_no: "hc-001", first_name: "Chidi", last_name: "Okafor" },
+  ])}, false) as r`)).rows[0].r;
+  check("import adds new students and skips existing admission numbers", [res.created, res.skipped], [2, 1]);
+  check("brothers and sisters share one parent record", res.guardians, 1);
+  check("the shared parent is linked to both children",
+    await count(`select count(*) n from public.student_guardians sg join public.guardians g on g.id = sg.guardian_id where g.phone = '08030000001'`), 2);
+  const res2 = (await db.query(`select public.import_students('${B}', ${studentsJson([{ admission_no: "HC/100", first_name: "Ngozi", last_name: "Eze-Obi" }])}, true) as r`)).rows[0].r;
+  check("re-importing with updates refreshes existing students", [res2.updated, await names(`select last_name from public.students where admission_no = 'HC/100'`)], [1, ["Eze-Obi"]]);
+  check("re-importing keeps the class when the file leaves it blank", await count(`select count(*) n from public.students where admission_no = 'HC/100' and class_arm_id is not null`), 1);
+  check("an import that puts a student in another school's class is refused entirely",
+    await refusedTo(`select public.import_students('${B}', ${studentsJson([{ admission_no: "HC/200", first_name: "A", last_name: "B" }, { admission_no: "HC/201", first_name: "C", last_name: "D", class_arm_id: aArm }])}, false)`), true);
+  check("a refused import adds nobody", await count(`select count(*) n from public.students where admission_no in ('HC/200', 'HC/201')`), 0);
+  check("one admin cannot import into another school", await refusedTo(`select public.import_students('${A}', ${studentsJson([{ admission_no: "X1", first_name: "A", last_name: "B" }])}, false)`), true);
+
+  const staffRes = (await db.query(`select public.import_staff('${B}', ${studentsJson([
+    { title: "Mrs", first_name: "Grace", last_name: "Ishaku", email: "Grace@School.ng", position: "Teacher" },
+    { first_name: "Samuel", last_name: "Adamu", phone: "08030000002" },
+  ])}) as r`)).rows[0].r;
+  const staffAgain = (await db.query(`select public.import_staff('${B}', ${studentsJson([{ first_name: "G", last_name: "I", email: "grace@school.ng" }, { first_name: "Samuel", last_name: "Adamu", phone: "08030000002" }])}) as r`)).rows[0].r;
+  check("staff import adds staff, then skips them on a second import", [staffRes.created, staffAgain.created, staffAgain.skipped], [2, 0, 2]);
 
   check("changing the term doesn't touch other schools", await names(`select name from public.terms where school_id = '${A}' and is_current`), []);
 });
