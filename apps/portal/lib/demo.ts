@@ -99,12 +99,13 @@ export const DEMO_STUDENTS: DemoStudent[] = (() => {
   const classes = DEMO_STRUCTURE.flatMap((s) => s.levels.flatMap((l) => l.arms.map((a) => (l.arms.length > 1 ? `${l.name}${a.name}` : l.name))));
   return Array.from({ length: 36 }, (_, i) => {
     const first = FIRST[i % FIRST.length]!;
-    const last = LAST[(i * 7) % LAST.length]!;
+    const last = LAST[(i * 7 + Math.floor(i / FIRST.length)) % LAST.length]!;
     return {
       id: `demo-student-${i + 1}`,
       name: `${first} ${last}`,
       admissionNo: `BFA/2026/${String(i + 1).padStart(3, "0")}`,
-      className: classes[(i * 7) % classes.length]!,
+      // The demo student (and the demo parent's child) is in JSS 1A, which has full sample results.
+      className: i === 0 ? "JSS 1A" : classes[(i * 7) % classes.length]!,
       gender: (i % FIRST.length) % 2 === 1 ? "female" : "male",
       status: "active",
     };

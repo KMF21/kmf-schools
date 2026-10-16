@@ -44,7 +44,7 @@ export const getArmOptions = cache(async (school: School): Promise<Array<ArmOpti
     );
 });
 
-const DEMO_STAFF: StaffRow[] = [
+export const DEMO_STAFF: StaffRow[] = [
   ["Dr", "Hauwa", "Bello", "Proprietor"],
   ["Mrs", "Grace", "Ishaku", "School administrator"],
   ["Mr", "Samuel", "Adamu", "Mathematics teacher"],

@@ -27,6 +27,23 @@ export async function managerContext(): Promise<{ ctx: Context } | { error: Acti
   return { ctx: { school: tenant.school, viewer, supabase: await supabaseForRequest() } };
 }
 
+/**
+ * For actions any staff member may try (entering scores, report comments). The
+ * database decides what each person may actually change, so a teacher can only
+ * save scores for their own classes and subjects.
+ */
+export async function staffContext(): Promise<{ ctx: Context } | { error: ActionState }> {
+  if (IS_DEMO) return { error: DEMO_READ_ONLY };
+  const tenant = await getTenant();
+  if (tenant.kind !== "school") return { error: { error: "Open your school's portal to make changes." } };
+  const viewer = await getViewer(tenant.school);
+  if (!viewer) return { error: { error: "Your session has ended. Sign in again, then retry." } };
+  if (!viewer.isPlatformAdmin && !viewer.roles.some((r) => r === "owner" || r === "admin" || r === "teacher")) {
+    return { error: { error: "Only teachers and school managers can enter results." } };
+  }
+  return { ctx: { school: tenant.school, viewer, supabase: await supabaseForRequest() } };
+}
+
 /** Turns empty form strings into null, and trims everything else. */
 export function text(form: FormData, name: string): string | null {
   const value = form.get(name);

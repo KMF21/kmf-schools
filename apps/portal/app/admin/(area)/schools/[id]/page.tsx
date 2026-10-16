@@ -12,6 +12,7 @@ import { getSchoolDetail, platformAddress, schoolPortalLink } from "@/lib/platfo
 import { addDomain, markDomainWorking, removeDomain, setSchoolStatus } from "../../../actions";
 import { StatusBadge } from "../../status-badge";
 import { ManagerForm } from "./manager-form";
+import { ResetManager } from "./reset-manager";
 
 export const metadata: Metadata = { title: "School" };
 
@@ -69,11 +70,11 @@ export default async function AdminSchoolPage({ params }: { params: Promise<{ id
             {school.managers.length ? (
               <ul className="divide-y divide-line">
                 {school.managers.map((m) => (
-                  <li key={`${m.userId}-${m.role}`} className="flex items-center gap-3 py-2.5 first:pt-0">
+                  <ResetManager key={`${m.userId}-${m.role}`} schoolId={school.id} userId={m.userId} name={m.name}>
                     <Avatar name={m.name} size={34} />
                     <span className="min-w-0 flex-1 truncate font-bold">{m.name}</span>
                     <Badge tone={m.role === "owner" ? "brand" : "neutral"}>{ROLE_LABELS[m.role as Role] ?? m.role}</Badge>
-                  </li>
+                  </ResetManager>
                 ))}
               </ul>
             ) : (

@@ -38,6 +38,12 @@ export function TermForm({ term }: { term: CurrentTerm }) {
           <Input id="next" name="next" type="date" defaultValue={term?.nextTermBegins ?? ""} aria-invalid={invalid("next")} />
           <FieldError state={state} name="next" />
         </Field>
+        <Field label="Days school opened" htmlFor="days_open" hint="For attendance on report cards, e.g. present 58 of 62 days. You can add it near the end of term.">
+          <span className="block w-32">
+            <Input id="days_open" name="days_open" inputMode="numeric" maxLength={3} defaultValue={term?.daysOpen ?? ""} aria-invalid={invalid("days_open")} />
+          </span>
+          <FieldError state={state} name="days_open" />
+        </Field>
       </div>
       <div className="flex justify-end">
         <SubmitButton pendingLabel="Saving">Save and make current</SubmitButton>

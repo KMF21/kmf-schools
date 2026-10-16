@@ -8,6 +8,11 @@
 /* Printing login slips: only the print copy (a direct child of body) is printed. */
 @media print {
   @page { size: A4; margin: 10mm; }
-  body:has(> .print-portal) { background: #fff !important; }
+  html:has(.print-portal), body:has(> .print-portal) { background: #fff !important; }
   body:has(> .print-portal) > :not(.print-portal) { display: none !important; }
+}
+@media print {
+  .print-portal .report-page + .report-page { break-before: page; }
+  .print-portal table { break-inside: auto; }
+  .print-portal tr { break-inside: avoid; }
 }

@@ -8,6 +8,7 @@ import { getTenant } from "@/lib/tenant";
 
 const NAV: Array<NavItem & { roles: readonly Role[] }> = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", roles: ["owner", "admin", "teacher", "bursar", "parent", "student"] },
+  { href: "/results", label: "Results", icon: "results", roles: ["owner", "admin", "teacher", "parent", "student"] },
   { href: "/students", label: "Students", icon: "students", roles: ["owner", "admin", "teacher", "bursar"] },
   { href: "/staff", label: "Staff", icon: "staff", roles: ["owner", "admin"] },
   { href: "/logins", label: "Logins", icon: "logins", roles: ["owner", "admin"] },

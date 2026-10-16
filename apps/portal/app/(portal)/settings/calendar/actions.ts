@@ -13,6 +13,7 @@ const termForm = z
     starts: date,
     ends: date,
     next: date,
+    days_open: z.coerce.number({ error: "Enter a whole number of days." }).int("Enter a whole number of days.").min(0).max(200, "That's more days than a term has.").nullable(),
   })
   .refine((v) => !v.starts || !v.ends || v.starts < v.ends, { path: ["ends"], message: "The term must end after it starts." })
   .refine((v) => !v.ends || !v.next || v.next > v.ends, { path: ["next"], message: "Next term must begin after this term ends." })
@@ -29,6 +30,7 @@ export async function saveCurrentTerm(_prev: ActionState, form: FormData): Promi
     starts: text(form, "starts"),
     ends: text(form, "ends"),
     next: text(form, "next"),
+    days_open: text(form, "days_open"),
   });
   if (!parsed.success) {
     const fields: Record<string, string> = {};
@@ -46,6 +48,8 @@ export async function saveCurrentTerm(_prev: ActionState, form: FormData): Promi
     p_next: v.next,
   });
   if (error) return friendly(error, "term");
+  const days = await supabase.from("terms").update({ days_open: v.days_open }).eq("school_id", school.id).eq("is_current", true);
+  if (days.error) return friendly(days.error, "term");
 
   revalidatePath("/", "layout");
   const names = ["First", "Second", "Third"];

@@ -5,3 +5,4 @@ export * from "./curriculum";
 export * from "./identity";
 export * from "./types";
 export * from "./import";
+export * from "./results";

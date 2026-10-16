@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
+  FileSpreadsheet,
   GraduationCap,
   KeyRound,
   LayoutDashboard,
@@ -25,6 +26,7 @@ import { ThemeToggle } from "./theme-toggle";
 
 const ICONS = {
   dashboard: LayoutDashboard,
+  results: FileSpreadsheet,
   students: GraduationCap,
   classes: BookOpen,
   staff: Users,

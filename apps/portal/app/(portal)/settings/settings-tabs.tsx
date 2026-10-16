@@ -8,6 +8,7 @@ const TABS = [
   { href: "/settings", label: "School profile" },
   { href: "/settings/calendar", label: "Session and term" },
   { href: "/settings/grading", label: "Grading" },
+  { href: "/settings/reports", label: "Report cards" },
 ];
 
 export function SettingsTabs() {

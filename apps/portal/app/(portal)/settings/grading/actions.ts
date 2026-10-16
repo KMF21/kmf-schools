@@ -68,6 +68,9 @@ export async function saveGrading(_prev: ActionState, form: FormData): Promise<A
     p_scale_name: text(form, "scale_name") ?? "Grading scale",
     p_bands: sorted,
   });
+  if (error?.code === "23503") {
+    return { error: "A CA or exam you removed already has scores entered, so it can't be removed. Rename it instead, or clear its scores first." };
+  }
   if (error) return friendly(error, "grading");
 
   revalidatePath("/settings/grading");

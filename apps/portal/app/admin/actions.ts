@@ -205,3 +205,35 @@ export async function markDomainWorking(_prev: ActionState, form: FormData): Pro
   revalidatePath(`/admin/schools/${schoolId.data}`);
   return { ok: `${hostname} marked as working.` };
 }
+
+/* ------------------------------------------------------ Password resets */
+
+/** KMF resets a proprietor's or school admin's password (they may sign in with a personal email). */
+export async function resetManagerPassword(_prev: AdminState, form: FormData): Promise<AdminState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  const userId = z.uuid().safeParse(form.get("user_id"));
+  if (!schoolId.success || !userId.success) return { error: "That person couldn't be found." };
+
+  // Only people who manage this school, so the button can't be pointed at anyone else.
+  const { data: member } = await ctx.supabase
+    .from("school_members")
+    .select("display_name")
+    .eq("school_id", schoolId.data)
+    .eq("user_id", userId.data)
+    .in("role", ["owner", "admin"])
+    .limit(1)
+    .maybeSingle();
+  if (!member) return { error: "That person doesn't manage this school." };
+
+  const admin = adminClient();
+  if (!admin) return { error: ADMIN_MISSING_MESSAGE };
+  const { data: user, error: userError } = await admin.auth.admin.getUserById(userId.data);
+  if (userError || !user.user?.email) return { error: "That login couldn't be found." };
+
+  const password = generatePassword();
+  const { error } = await admin.auth.admin.updateUserById(userId.data, { password });
+  if (error) return friendly(error, "password");
+  return { ok: "New password created.", login: { name: member.display_name, login: displayLogin(user.user.email), password } };
+}

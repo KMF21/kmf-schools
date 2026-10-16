@@ -13,6 +13,7 @@ export type CurrentTerm = {
   startsOn: string | null;
   endsOn: string | null;
   nextTermBegins: string | null;
+  daysOpen: number | null;
 } | null;
 
 export type Announcement = { id: string; title: string; body: string; audience: string; publishedAt: string | null };
@@ -59,12 +60,12 @@ function demoStructure(): StructureSection[] {
 
 export const getCurrentTerm = cache(async (school: School): Promise<CurrentTerm> => {
   if (IS_DEMO) {
-    return { number: 1, name: "First term", session: "2026/2027", startsOn: "2026-09-14", endsOn: "2026-12-11", nextTermBegins: "2027-01-11" };
+    return { number: 1, name: "First term", session: "2026/2027", startsOn: "2026-09-14", endsOn: "2026-12-11", nextTermBegins: "2027-01-11", daysOpen: 62 };
   }
   const supabase = await supabaseForRequest();
   const { data, error } = await supabase
     .from("terms")
-    .select("term_number, name, starts_on, ends_on, next_term_begins, academic_sessions(name)")
+    .select("*, academic_sessions(name)") // "*" so this still works before the results update adds days_open
     .eq("school_id", school.id)
     .eq("is_current", true)
     .maybeSingle();
@@ -78,6 +79,7 @@ export const getCurrentTerm = cache(async (school: School): Promise<CurrentTerm>
     startsOn: data.starts_on,
     endsOn: data.ends_on,
     nextTermBegins: data.next_term_begins,
+    daysOpen: data.days_open ?? null,
   };
 });
 
@@ -132,20 +134,22 @@ export const getOverview = cache(async (school: School): Promise<Overview> => {
     return {
       term,
       counts: { students, staff: DEMO_STAFF_COUNT, classes, subjects },
-      setup: buildSetup({ profile: Boolean(DEMO_SCHOOL.address && DEMO_SCHOOL.phone), structure: true, grading: true, students: true, staff: true, firstResult: false }),
+      setup: buildSetup({ profile: Boolean(DEMO_SCHOOL.address && DEMO_SCHOOL.phone), structure: true, grading: true, students: true, staff: true, firstResult: true }),
     };
   }
 
   const supabase = await supabaseForRequest();
   const counted = (table: string) => supabase.from(table).select("*", { count: "exact", head: true }).eq("school_id", school.id);
-  const [students, staff, arms, subjects, scales, scoreSections] = await Promise.all([
+  const [students, staff, arms, subjects, scales, scoreSections, releases] = await Promise.all([
     counted("students").eq("status", "active"),
     counted("staff").eq("is_active", true),
     counted("class_arms"),
     counted("subjects").eq("is_active", true),
     counted("grading_scales"),
     counted("sections").eq("is_enabled", true).eq("assessment_style", "score"),
+    counted("result_releases"),
   ]);
+  // Results tables may not exist yet on a database that hasn't had the results update.
   for (const r of [students, staff, arms, subjects, scales, scoreSections]) if (r.error) fail("the school overview", r.error);
 
   return {
@@ -157,7 +161,7 @@ export const getOverview = cache(async (school: School): Promise<Overview> => {
       grading: (scoreSections.count ?? 0) > 0 && (scales.count ?? 0) >= (scoreSections.count ?? 0),
       students: (students.count ?? 0) > 0,
       staff: (staff.count ?? 0) > 0,
-      firstResult: false,
+      firstResult: (releases.count ?? 0) > 0,
     }),
   };
 });
