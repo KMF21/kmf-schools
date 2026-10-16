@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DEMO_PEOPLE } from "@/lib/demo";
 import { IS_DEMO } from "@/lib/env";
 import { getViewer } from "@/lib/session";
-import { requireSchool } from "@/lib/tenant";
+import { getTenant, requireSchool } from "@/lib/tenant";
 import { signInAsDemo } from "./actions";
 import { LoginForm } from "./login-form";
 
@@ -19,6 +19,8 @@ const DEMO_ROLES: Role[] = ["admin", "teacher", "parent", "student"];
 export default async function LoginPage() {
   const school = await requireSchool();
   if (await getViewer(school)) redirect("/dashboard");
+  const tenant = await getTenant();
+  const chosenByPath = tenant.kind === "school" && tenant.chosenByPath;
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
@@ -90,6 +92,15 @@ export default async function LoginPage() {
                 ))}
               </div>
             </Card>
+          ) : null}
+
+          {chosenByPath ? (
+            <p className="mt-5 text-center text-sm text-ink-muted">
+              Not your school?{" "}
+              <a href="/leave-school" className="font-bold text-brand-text underline-offset-4 hover:underline">
+                Back to KMF Schools
+              </a>
+            </p>
           ) : null}
         </div>
       </section>

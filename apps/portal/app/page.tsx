@@ -7,7 +7,7 @@ import { getTenant } from "@/lib/tenant";
 
 const KMF_WHATSAPP = "https://wa.me/2349110137795";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ school?: string }> }) {
   const tenant = await getTenant();
 
   if (tenant.kind === "school") {
@@ -34,8 +34,11 @@ export default async function Home() {
     );
   }
 
-  const demoHost = `brightfield.${tenant.hostname.endsWith(ROOT_DOMAIN) ? ROOT_DOMAIN : "localhost"}`;
-  const demoUrl = tenant.hostname.endsWith(ROOT_DOMAIN) ? `https://${demoHost}` : `http://${demoHost}:3000`;
+  // On the real platform domain the demo school has its own subdomain; elsewhere
+  // (Vercel links, localhost) it opens by path.
+  const onPlatformDomain = tenant.hostname === ROOT_DOMAIN || tenant.hostname === `www.${ROOT_DOMAIN}`;
+  const demoUrl = onPlatformDomain ? `https://brightfield.${ROOT_DOMAIN}` : "/s/brightfield";
+  const schoolNotFound = (await searchParams).school === "not-found";
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-brand text-brand-on">
@@ -66,6 +69,11 @@ export default async function Home() {
               About KMF Enterprise
             </a>
           </div>
+          {schoolNotFound ? (
+            <p role="alert" className="mx-auto mt-6 max-w-md rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold">
+              That school link doesn&apos;t match any school. Check the spelling, or contact KMF support.
+            </p>
+          ) : null}
           {IS_DEMO ? <p className="mt-6 text-sm text-white/70">Running in demo mode with sample data.</p> : null}
         </section>
       </div>

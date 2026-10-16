@@ -56,6 +56,7 @@ Tools for adding schools, staff and students from the portal itself come in the 
 | `brightfield.kmfschools.ng` | The subdomain is the school's slug |
 | `portal.brightfield.com.ng` | Exact match in the `school_domains` table |
 | `brightfield.localhost:3000` | Local development, same as a subdomain |
+| `kmf-schools.vercel.app/s/brightfield` | For addresses without a school subdomain (Vercel and preview links): remembers the school in this browser. `/leave-school` forgets it. |
 
 To connect a school's own domain: the school adds a DNS record pointing to Vercel, KMF adds the domain to the Vercel project, then adds a row to `school_domains`.
 

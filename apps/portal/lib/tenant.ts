@@ -1,13 +1,13 @@
 import { cache } from "react";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { classifyHost, type School } from "@kmf/core";
+import { classifyHost, isValidSlug, type School } from "@kmf/core";
 import { IS_DEMO, ROOT_DOMAIN, publicAssetUrl } from "./env";
 import { DEMO_SCHOOL } from "./demo";
 import { supabaseAnon } from "./supabase";
 
 export type Tenant =
-  | { kind: "school"; school: School; hostname: string }
+  | { kind: "school"; school: School; hostname: string; chosenByPath: boolean }
   | { kind: "platform"; hostname: string }
   | { kind: "unknown"; hostname: string };
 
@@ -60,20 +60,37 @@ export const getTenant = cache(async (): Promise<Tenant> => {
   const h = await headers();
   const target = classifyHost(h.get("x-kmf-host") ?? h.get("host"), ROOT_DOMAIN);
 
-  if (target.kind === "platform") return { kind: "platform", hostname: target.hostname };
+  if (target.kind === "platform") {
+    // Platform addresses (kmf-schools.vercel.app, preview links, localhost) have no
+    // subdomain to name a school, so /s/<slug> remembers one in a cookie instead.
+    const chosen = (await cookies()).get(CHOSEN_SCHOOL_COOKIE)?.value;
+    const school = chosen && isValidSlug(chosen) ? await findSchoolBySlug(chosen) : null;
+    return school
+      ? { kind: "school", school, hostname: target.hostname, chosenByPath: true }
+      : { kind: "platform", hostname: target.hostname };
+  }
 
   if (IS_DEMO) {
     // Demo mode: any school address shows the demo school, so links can be shared freely.
-    return { kind: "school", school: DEMO_SCHOOL, hostname: target.hostname };
+    return { kind: "school", school: DEMO_SCHOOL, hostname: target.hostname, chosenByPath: false };
   }
 
   const school =
     target.kind === "slug"
-      ? await lookup(`slug:${target.slug}`, { p_slug: target.slug })
+      ? await findSchoolBySlug(target.slug)
       : await lookup(`host:${target.hostname}`, { p_hostname: target.hostname });
 
-  return school ? { kind: "school", school, hostname: target.hostname } : { kind: "unknown", hostname: target.hostname };
+  return school
+    ? { kind: "school", school, hostname: target.hostname, chosenByPath: false }
+    : { kind: "unknown", hostname: target.hostname };
 });
+
+export const CHOSEN_SCHOOL_COOKIE = "kmf_school";
+
+export async function findSchoolBySlug(slug: string): Promise<School | null> {
+  if (IS_DEMO) return slug === DEMO_SCHOOL.slug ? DEMO_SCHOOL : null;
+  return lookup(`slug:${slug}`, { p_slug: slug });
+}
 
 /** For pages that only make sense inside a school. */
 export async function requireSchool(): Promise<School> {

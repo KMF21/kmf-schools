@@ -162,7 +162,8 @@ export function PortalShell({
       ) : null}
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 sm:pt-4">
+        {/* The page background fills the strip above the floating bar, so content never peeks through. */}
+        <header className="sticky top-0 z-30 bg-canvas px-3 pt-3 sm:px-6 sm:pt-4">
           <div className="flex h-16 items-center gap-3 rounded-full border border-line bg-surface/95 px-3 shadow-[var(--shadow-float)] backdrop-blur sm:px-4">
             <button
               type="button"
