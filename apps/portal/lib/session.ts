@@ -1,0 +1,65 @@
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { ROLES, type Role, type School } from "@kmf/core";
+import { IS_DEMO } from "./env";
+import { DEMO_PEOPLE, DEMO_ROLE_COOKIE, demoRole } from "./demo";
+import { supabaseForRequest } from "./supabase";
+import { requireSchool } from "./tenant";
+
+export type Viewer = {
+  userId: string;
+  name: string;
+  email: string | null;
+  /** The role this page is shown in. */
+  role: Role;
+  /** All roles this person holds at this school (e.g. a teacher who is also a parent). */
+  roles: Role[];
+};
+
+/** Highest-ranked role first: owner, admin, teacher, bursar, parent, student. */
+function rank(roles: Role[]): Role[] {
+  return [...roles].sort((a, b) => ROLES.indexOf(a) - ROLES.indexOf(b));
+}
+
+/** The signed-in person at this school, or null. Membership of another school does not count. */
+export const getViewer = cache(async (school: School): Promise<Viewer | null> => {
+  if (IS_DEMO) {
+    const role = demoRole((await cookies()).get(DEMO_ROLE_COOKIE)?.value);
+    if (!role) return null;
+    const person = DEMO_PEOPLE[role];
+    return { userId: `demo-${role}`, name: person.name, email: person.email || null, role, roles: [role] };
+  }
+
+  const supabase = await supabaseForRequest();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims.sub;
+  if (!userId) return null;
+
+  const { data: rows, error } = await supabase
+    .from("school_members")
+    .select("role, display_name")
+    .eq("school_id", school.id)
+    .eq("user_id", userId);
+  if (error) throw new Error(`Could not load your account: ${error.message}`);
+  if (!rows || rows.length === 0) return null;
+
+  const roles = rank(rows.map((r) => r.role as Role));
+  const email = typeof claims.claims.email === "string" ? claims.claims.email : null;
+  return {
+    userId,
+    name: rows[0]!.display_name,
+    email: email && !email.endsWith(".accounts.kmfschools.ng") ? email : null,
+    role: roles[0]!,
+    roles,
+  };
+});
+
+/** For pages behind sign-in. Sends signed-out visitors to the login page. */
+export async function requireViewer(allowed?: readonly Role[]): Promise<{ school: School; viewer: Viewer }> {
+  const school = await requireSchool();
+  const viewer = await getViewer(school);
+  if (!viewer) redirect("/login");
+  if (allowed && !viewer.roles.some((r) => allowed.includes(r))) redirect("/dashboard");
+  return { school, viewer };
+}

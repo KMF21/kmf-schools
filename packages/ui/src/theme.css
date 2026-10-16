@@ -1,0 +1,163 @@
+/*
+ * KMF Schools design tokens.
+ *
+ * Visual language follows the Academica reference: Academica green, generous
+ * rounded corners, pill buttons and tags, soft green-grey canvas, airy cards.
+ *
+ * The school's brand colour arrives as three CSS variables set on <html> at
+ * render time (see brandCssVars in @kmf/core):
+ *   --brand         solid fill, always readable with white text
+ *   --brand-hover   pressed / hover fill
+ *   --brand-strong  text-strength shade for light backgrounds
+ * Every tint below is derived from those, so one hex value re-themes everything.
+ */
+
+@theme {
+  --font-display: "Ubuntu", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Nunito Sans Variable", "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-control: 0.75rem;
+  --radius-card: 1.25rem;
+  --radius-panel: 1.75rem;
+
+  --shadow-card: 0 1px 2px rgb(16 40 28 / 0.04), 0 12px 32px -18px rgb(16 40 28 / 0.22);
+  --shadow-float: 0 2px 6px rgb(16 40 28 / 0.05), 0 18px 40px -16px rgb(16 40 28 / 0.28);
+  --shadow-brand: 0 10px 24px -10px color-mix(in oklab, var(--brand) 70%, transparent);
+}
+
+:root {
+  --brand: #1a8754;
+  --brand-hover: #16744a;
+  --brand-strong: #0f5c39;
+  --brand-on: #ffffff;
+
+  --canvas: #f2f6f4;
+  --surface: #ffffff;
+  --surface-sunk: #f7faf8;
+  --ink: #17201b;
+  --ink-muted: #56635c;
+  --ink-faint: #85918a;
+  --line: #e1e8e4;
+  --line-strong: #cbd6d0;
+
+  --ok: #157a3c;
+  --ok-soft: #e6f4ea;
+  --warn: #9a5a06;
+  --warn-soft: #fdf1df;
+  --bad: #b42318;
+  --bad-soft: #fdeceb;
+  --info: #0b628f;
+  --info-soft: #e5f1f8;
+
+  --brand-soft: color-mix(in oklab, var(--brand) 12%, var(--surface));
+  --brand-wash: color-mix(in oklab, var(--brand) 6%, var(--surface));
+  --brand-line: color-mix(in oklab, var(--brand) 28%, var(--surface));
+  --brand-text: var(--brand-strong);
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0e1411;
+  --surface: #151d19;
+  --surface-sunk: #111814;
+  --ink: #e6eee9;
+  --ink-muted: #a5b2ab;
+  --ink-faint: #75837b;
+  --line: #24302a;
+  --line-strong: #33423a;
+
+  --ok: #6fd393;
+  --ok-soft: #173023;
+  --warn: #f1b45a;
+  --warn-soft: #33260f;
+  --bad: #f2877e;
+  --bad-soft: #3a1a17;
+  --info: #79c3ec;
+  --info-soft: #132a38;
+
+  --brand-soft: color-mix(in oklab, var(--brand) 26%, var(--surface));
+  --brand-wash: color-mix(in oklab, var(--brand) 12%, var(--surface));
+  --brand-line: color-mix(in oklab, var(--brand) 45%, var(--surface));
+  --brand-text: color-mix(in oklab, var(--brand) 55%, white);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-on: var(--brand-on);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-wash: var(--brand-wash);
+  --color-brand-line: var(--brand-line);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--canvas);
+    min-height: 100dvh;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    color: var(--ink);
+    line-height: 1.2;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

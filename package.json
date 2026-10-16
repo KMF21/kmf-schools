@@ -1,0 +1,24 @@
+{
+  "name": "kmf-schools",
+  "private": true,
+  "description": "KMF Schools — multi-school website and management platform by KMF Enterprise",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @kmf/portal",
+    "build": "npm run build --workspace @kmf/portal",
+    "start": "npm run start --workspace @kmf/portal",
+    "lint": "npm run lint --workspace @kmf/portal",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:db",
+    "test:db": "node supabase/tests/access-rules.test.mjs"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10"
+  }
+}
