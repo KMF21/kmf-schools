@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const repo = new URL("../..", import.meta.url).pathname;
 const db = new PGlite();
@@ -15,7 +15,10 @@ await db.exec(`
   grant execute on function auth.uid() to anon, authenticated;
 `);
 
-await db.exec(readFileSync(`${repo}/supabase/migrations/20261016000000_foundation.sql`, "utf8"));
+// Every migration in order, except storage (which needs Supabase's storage schema).
+for (const file of readdirSync(`${repo}/supabase/migrations`).filter((f) => f.endsWith(".sql") && !f.includes("storage")).sort()) {
+  await db.exec(readFileSync(`${repo}/supabase/migrations/${file}`, "utf8"));
+}
 await db.exec(`
   grant usage on schema public to anon, authenticated;
   grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -68,6 +71,9 @@ await as(u(1), async () => {
   try { await db.exec(`insert into public.students (school_id, admission_no, first_name, last_name) values ('${B}', 'X1', 'X', 'Y')`); }
   catch { blocked = true; }
   check("A admin cannot add a student to school B", blocked, true);
+  const added = await db.query(`insert into public.students (school_id, admission_no, first_name, last_name) values ('${A}', 'BFA/2026/099', 'New', 'Pupil') returning id`);
+  check("A admin can add a student to own school", added.rows.length, 1);
+  await db.exec(`delete from public.students where admission_no = 'BFA/2026/099'`);
   let ownerBlocked = false;
   try { await db.exec(`insert into public.school_members (school_id, user_id, role, display_name) values ('${A}', '${u(5)}', 'owner', 'x')`); }
   catch { ownerBlocked = true; }
@@ -82,6 +88,7 @@ await as(u(4), async () => {
 await as(u(2), async () => {
   check("teacher sees all students in own school", await count("select count(*) n from public.students"), 2);
   check("teacher sees staff-only announcements", await count("select count(*) n from public.announcements where audience = 'staff'"), 1);
+  check("teacher cannot delete a student", (await db.query(`delete from public.students where school_id = '${A}' returning id`)).rows.length, 0);
   check("teacher cannot edit school settings", (await db.query(`update public.schools set name = 'x' where id = '${A}' returning id`)).rows.length, 0);
 });
 
@@ -95,6 +102,18 @@ await as(u(3), async () => {
 await as(u(6), async () => {
   check("student sees only themselves", await names("select first_name from public.students"), ["Bello"]);
 });
+
+await db.exec(`insert into public.platform_admins (user_id) values ('${u(5)}')`);
+await as(u(5), async () => {
+  const made = await db.query(`insert into public.schools (slug, name) values ('newschool', 'New School') returning id`);
+  check("KMF admin can create a school", made.rows.length, 1);
+});
+await as(u(1), async () => {
+  let refused = false;
+  try { await db.exec(`insert into public.schools (slug, name) values ('rogue', 'Rogue School')`); } catch { refused = true; }
+  check("school admin cannot create a school", refused, true);
+});
+await db.exec(`delete from public.platform_admins where user_id = '${u(5)}'`);
 
 await as(u(5), async () => {
   check("person with no membership sees nothing", await count("select count(*) n from public.students"), 0);

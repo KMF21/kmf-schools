@@ -52,6 +52,16 @@ begin
     if r.style = 'score' then
       insert into public.assessment_components (school_id, section_id, name, max_score, sort_order)
       values (v_school, v_section, 'CA 1', 20, 1), (v_school, v_section, 'CA 2', 20, 2), (v_school, v_section, 'Exam', 60, 3);
+
+      -- Same defaults as WAEC_SCALE and BASIC_SCALE in packages/core/src/curriculum.ts
+      insert into public.grading_scales (school_id, section_id, name, bands)
+      values (v_school, v_section,
+        case when r.kind = 'senior_secondary' then 'WAEC scale' else 'Standard scale' end,
+        case when r.kind = 'senior_secondary' then
+          '[{"min":75,"max":100,"grade":"A1","remark":"Excellent"},{"min":70,"max":74,"grade":"B2","remark":"Very good"},{"min":65,"max":69,"grade":"B3","remark":"Good"},{"min":60,"max":64,"grade":"C4","remark":"Credit"},{"min":55,"max":59,"grade":"C5","remark":"Credit"},{"min":50,"max":54,"grade":"C6","remark":"Credit"},{"min":45,"max":49,"grade":"D7","remark":"Pass"},{"min":40,"max":44,"grade":"E8","remark":"Pass"},{"min":0,"max":39,"grade":"F9","remark":"Fail"}]'::jsonb
+        else
+          '[{"min":70,"max":100,"grade":"A","remark":"Excellent"},{"min":60,"max":69,"grade":"B","remark":"Very good"},{"min":50,"max":59,"grade":"C","remark":"Good"},{"min":45,"max":49,"grade":"D","remark":"Fair"},{"min":40,"max":44,"grade":"E","remark":"Pass"},{"min":0,"max":39,"grade":"F","remark":"Fail"}]'::jsonb
+        end);
     end if;
 
     v_sort := 0;
