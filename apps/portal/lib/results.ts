@@ -219,34 +219,50 @@ export const getClassInfo = cache(async (school: School, armId: string): Promise
     };
   }
 
-  const supabase = await supabaseForRequest();
-  const [students, armRow, assignments] = await Promise.all([
-    supabase.from("students").select("id, admission_no, first_name, middle_name, last_name, gender").eq("school_id", school.id).eq("class_arm_id", armId).eq("status", "active").order("last_name").order("first_name"),
-    supabase.from("class_arms").select("form_teacher_id, staff:form_teacher_id(id, title, first_name, last_name)").eq("school_id", school.id).eq("id", armId).maybeSingle(),
-    supabase.from("teaching_assignments").select("subject_id, staff(id, title, first_name, last_name)").eq("school_id", school.id).eq("class_arm_id", armId),
-  ]);
-  if (students.error) fail("students", students.error);
-  if (armRow.error) fail("the class", armRow.error);
-  if (assignments.error) fail("teachers", assignments.error);
-
-  const subjectTeachers: Record<string, Person[]> = {};
-  for (const a of assignments.data ?? []) {
-    const s = a.staff as unknown as { id: string; title: string | null; first_name: string; last_name: string } | null;
-    if (s) (subjectTeachers[a.subject_id] ??= []).push({ id: s.id, name: staffName(s) });
-  }
-  const ft = armRow.data?.staff as unknown as { id: string; title: string | null; first_name: string; last_name: string } | null;
-
+  const people = await getSchoolPeople(school);
   return {
     ...base,
-    students: (students.data ?? []).map((s) => ({
-      id: s.id,
-      name: [s.last_name, s.first_name, s.middle_name].filter(Boolean).join(" "),
-      admissionNo: s.admission_no,
-      gender: s.gender,
-    })),
-    formTeacher: ft ? { id: ft.id, name: staffName(ft) } : null,
-    subjectTeachers,
+    students: people.studentsByArm.get(armId) ?? [],
+    formTeacher: people.formTeacherByArm.get(armId) ?? null,
+    subjectTeachers: people.teachersByArm.get(armId) ?? {},
   };
+});
+
+/**
+ * Students, form teachers and subject teachers for the whole school in four
+ * queries, shared by every class on the page (the results list shows them all).
+ */
+const getSchoolPeople = cache(async (school: School) => {
+  const supabase = await supabaseForRequest();
+  const [students, arms, assignments, staff] = await Promise.all([
+    supabase.from("students").select("id, class_arm_id, admission_no, first_name, middle_name, last_name, gender").eq("school_id", school.id).eq("status", "active").not("class_arm_id", "is", null).order("last_name").order("first_name"),
+    supabase.from("class_arms").select("id, form_teacher_id").eq("school_id", school.id),
+    supabase.from("teaching_assignments").select("class_arm_id, subject_id, staff_id").eq("school_id", school.id),
+    supabase.from("staff").select("id, title, first_name, last_name").eq("school_id", school.id),
+  ]);
+  if (students.error) fail("students", students.error);
+  if (arms.error) fail("classes", arms.error);
+  if (assignments.error) fail("teachers", assignments.error);
+  // Parents and students can't read the staff list; they don't need teacher names here.
+  const names = new Map((staff.data ?? []).map((s) => [s.id as string, staffName(s)]));
+  const person = (id: string | null): Person | null => (id && names.has(id) ? { id, name: names.get(id)! } : null);
+
+  const studentsByArm = new Map<string, ClassStudent[]>();
+  for (const s of students.data ?? []) {
+    const list = studentsByArm.get(s.class_arm_id) ?? [];
+    list.push({ id: s.id, name: [s.last_name, s.first_name, s.middle_name].filter(Boolean).join(" "), admissionNo: s.admission_no, gender: s.gender });
+    studentsByArm.set(s.class_arm_id, list);
+  }
+  const formTeacherByArm = new Map<string, Person | null>((arms.data ?? []).map((a) => [a.id as string, person(a.form_teacher_id)]));
+  const teachersByArm = new Map<string, Record<string, Person[]>>();
+  for (const a of assignments.data ?? []) {
+    const p = person(a.staff_id);
+    if (!p) continue;
+    const bySubject = teachersByArm.get(a.class_arm_id) ?? {};
+    (bySubject[a.subject_id] ??= []).push(p);
+    teachersByArm.set(a.class_arm_id, bySubject);
+  }
+  return { studentsByArm, formTeacherByArm, teachersByArm };
 });
 
 /* ----------------------------------------------------- Who can do what */
