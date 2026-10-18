@@ -1,10 +1,11 @@
 import { CalendarPlus, Receipt, RefreshCw, Trash2 } from "lucide-react";
-import { Badge, Card, CardHeader, Field, Input, Select } from "@kmf/ui";
+import { Badge, Card, CardHeader, Input } from "@kmf/ui";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/form-bits";
-import { isOverdue, PLAN_LABELS, termAmount, type BillingPlan, type Invoice } from "@/lib/billing";
+import { isOverdue, termAmount, type BillingPlan, type Invoice } from "@/lib/billing";
 import { formatDate, formatNaira } from "@/lib/format";
-import { createInvoice, deleteInvoice, extendInvoice, recountInvoice, saveBillingPlan, setInvoiceStatus } from "../../../actions";
+import { createInvoice, deleteInvoice, extendInvoice, recountInvoice, setInvoiceStatus } from "../../../actions";
+import { PlanForm } from "./plan-form";
 
 /** KMF's view of one school's plan and invoices. */
 export function BillingCard({ schoolId, plan, invoices, activeStudents }: { schoolId: string; plan: BillingPlan; invoices: Invoice[]; activeStudents: number }) {
@@ -20,37 +21,7 @@ export function BillingCard({ schoolId, plan, invoices, activeStudents }: { scho
         description="The school can publish results once the term's invoice is paid, or while it's within the grace period."
       />
       <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
-        <ActionForm action={saveBillingPlan} hidden={{ school_id: schoolId }} className="space-y-4">
-          <Field label="Plan" htmlFor="plan">
-            <Select id="plan" name="plan" defaultValue={plan.plan}>
-              {Object.entries(PLAN_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Rate per student (₦)" htmlFor="rate">
-              <Input id="rate" name="rate" inputMode="numeric" defaultValue={plan.rate} />
-            </Field>
-            <Field label="Minimum students" htmlFor="minimum_students">
-              <Input id="minimum_students" name="minimum_students" inputMode="numeric" defaultValue={plan.minimumStudents} />
-            </Field>
-            <Field label="Yearly amount (₦)" htmlFor="yearly_amount">
-              <Input id="yearly_amount" name="yearly_amount" inputMode="numeric" defaultValue={plan.yearlyAmount} />
-            </Field>
-            <Field label="Days to pay" htmlFor="grace_days">
-              <Input id="grace_days" name="grace_days" inputMode="numeric" defaultValue={plan.graceDays} />
-            </Field>
-          </div>
-          <Field label="Notes" htmlFor="notes" hint="Only KMF sees this, e.g. agreed discount.">
-            <Input id="notes" name="notes" defaultValue={plan.notes ?? ""} maxLength={200} />
-          </Field>
-          <SubmitButton variant="outline" pendingLabel="Saving">
-            Save plan
-          </SubmitButton>
-        </ActionForm>
+        <PlanForm schoolId={schoolId} plan={plan} />
 
         <div className="space-y-4">
           {plan.plan !== "free" ? (
