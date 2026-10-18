@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { scoreProblem } from "@kmf/core";
 import { friendly, managerContext, staffContext, type ActionState } from "@/lib/actions";
+import { getPublishStatus } from "@/lib/billing";
 import { getClassInfo, resolveTerm } from "@/lib/results";
 
 const uuid = z.uuid();
@@ -163,8 +164,10 @@ export async function publishClass(_prev: ActionState, form: FormData): Promise<
   if (!parsed.success) return { error: "That class couldn't be found." };
   const { termId, armId } = parsed.data;
 
-  const cls = await getClassInfo(school, armId);
-  if (!cls) return { error: "That class couldn't be found." };
+  const [cls, term] = await Promise.all([getClassInfo(school, armId), resolveTerm(school, termId)]);
+  if (!cls || !term) return { error: "That class couldn't be found." };
+  const billing = await getPublishStatus(school, term, access.ctx.viewer.isPlatformAdmin);
+  if (!billing.allowed) return { error: billing.message ?? "Publishing is locked. Contact KMF support." };
 
   // Every student gets a report row, so each one appears for their parents.
   if (cls.students.length) {
@@ -173,6 +176,7 @@ export async function publishClass(_prev: ActionState, form: FormData): Promise<
     if (error) return resultError(error, "reports");
   }
   const { error } = await supabase.from("result_releases").insert({ school_id: school.id, term_id: termId, class_arm_id: armId });
+  if (error?.code === "42501") return { error: "Publishing is locked until this term's KMF invoice is paid. Contact KMF support." };
   if (error && error.code !== "23505") return friendly(error, "results");
   revalidatePath("/results", "layout");
   return { ok: `${cls.label} results are published. Parents and students can now see them, and scores are locked.` };

@@ -30,3 +30,21 @@ export function supabaseAnon() {
   });
   return anonClient;
 }
+
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string; code?: string } | null }>;
+
+/**
+ * Supabase returns at most 1,000 rows per request. This keeps asking for the
+ * next 1,000 until everything is in, so large classes and schools are never
+ * cut off. `page(from, to)` must sort by a unique key so pages don't overlap.
+ */
+export async function fetchAll<T>(page: (from: number, to: number) => Page<T>, size = 1000): Promise<{ data: T[]; error: { message: string; code?: string } | null }> {
+  const all: T[] = [];
+  for (let from = 0; from < 200_000; from += size) {
+    const { data, error } = await page(from, from + size - 1);
+    if (error) return { data: all, error };
+    all.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return { data: all, error: null };
+}

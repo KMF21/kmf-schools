@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Role, School, SetupStep } from "@kmf/core";
 import { IS_DEMO } from "./env";
 import { DEMO_SCHOOL, DEMO_STAFF_COUNT, DEMO_STRUCTURE, DEMO_STUDENTS } from "./demo";
-import { supabaseForRequest } from "./supabase";
+import { fetchAll, supabaseForRequest } from "./supabase";
 
 /* ------------------------------------------------------------------ Types */
 
@@ -21,7 +21,9 @@ export type Announcement = { id: string; title: string; body: string; audience: 
 export type StructureLevel = { id: string; name: string; arms: Array<{ id: string; name: string; students: number }>; subjects: string[] };
 export type StructureSection = { id: string; name: string; kind: string; assessmentStyle: "score" | "rating"; levels: StructureLevel[] };
 
-export type StudentRow = { id: string; name: string; admissionNo: string; className: string; gender: string | null; status: string };
+export type StudentRow = { id: string; name: string; admissionNo: string; className: string; classArmId: string | null; gender: string | null; status: string };
+
+export type StudentFilter = { search?: string; classId?: string; status?: "active" | "graduated" | "withdrawn" | "all" };
 
 export type Overview = {
   term: CurrentTerm;
@@ -93,7 +95,7 @@ export const getStructure = cache(async (school: School): Promise<StructureSecti
     supabase.from("class_arms").select("id, class_level_id, name").eq("school_id", school.id).order("name"),
     supabase.from("class_subjects").select("class_level_id, subject_id, sort_order").eq("school_id", school.id),
     supabase.from("subjects").select("id, name").eq("school_id", school.id),
-    supabase.from("students").select("class_arm_id").eq("school_id", school.id).eq("status", "active"),
+    fetchAll<{ class_arm_id: string | null }>((a, b) => supabase.from("students").select("class_arm_id").eq("school_id", school.id).eq("status", "active").order("id").range(a, b)),
   ]);
   for (const [what, r] of [["sections", sections], ["classes", levels], ["class arms", arms], ["class subjects", classSubjects], ["subjects", subjects], ["students", students]] as const) {
     if (r.error) fail(what, r.error);
@@ -202,10 +204,15 @@ export const getAnnouncements = cache(async (school: School, roles: readonly Rol
   return (data ?? []).map((a) => ({ id: a.id, title: a.title, body: a.body, audience: a.audience, publishedAt: a.published_at }));
 });
 
-export async function getStudents(school: School, search?: string): Promise<StudentRow[]> {
-  const term = search?.trim().toLowerCase() ?? "";
+export async function getStudents(school: School, filter: StudentFilter = {}): Promise<StudentRow[]> {
+  const term = filter.search?.trim().toLowerCase() ?? "";
+  const status = filter.status ?? "active";
   if (IS_DEMO) {
-    return DEMO_STUDENTS.filter((s) => !term || s.name.toLowerCase().includes(term) || s.admissionNo.toLowerCase().includes(term));
+    const arms = demoStructure().flatMap((s) => s.levels.flatMap((l) => l.arms.map((a) => ({ id: a.id, label: l.arms.length > 1 ? `${l.name}${a.name}` : l.name }))));
+    return DEMO_STUDENTS.map((s) => ({ ...s, classArmId: arms.find((a) => a.label === s.className)?.id ?? null }))
+      .filter((s) => !term || s.name.toLowerCase().includes(term) || s.admissionNo.toLowerCase().includes(term))
+      .filter((s) => !filter.classId || s.classArmId === filter.classId)
+      .filter((s) => status === "all" || s.status === status);
   }
 
   const supabase = await supabaseForRequest();
@@ -214,7 +221,9 @@ export async function getStudents(school: School, search?: string): Promise<Stud
     .select("id, first_name, middle_name, last_name, admission_no, gender, status, class_arm_id")
     .eq("school_id", school.id)
     .order("last_name")
-    .limit(500);
+    .limit(1000);
+  if (status !== "all") query = query.eq("status", status);
+  if (filter.classId) query = query.eq("class_arm_id", filter.classId);
   if (term) {
     const safe = term.replace(/[%,()]/g, " ");
     query = query.or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,admission_no.ilike.%${safe}%`);
@@ -231,6 +240,7 @@ export async function getStudents(school: School, search?: string): Promise<Stud
     name: [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(" "),
     admissionNo: s.admission_no,
     className: (s.class_arm_id && armName.get(s.class_arm_id)) || "Not in a class",
+    classArmId: s.class_arm_id,
     gender: s.gender,
     status: s.status,
   }));

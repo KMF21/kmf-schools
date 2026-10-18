@@ -2,7 +2,7 @@ import { cache } from "react";
 import { BASIC_SCALE, DEFAULT_COMPONENTS, WAEC_SCALE, type GradeBand, type School, type SectionKind } from "@kmf/core";
 import { IS_DEMO } from "./env";
 import { DEMO_STRUCTURE } from "./demo";
-import { supabaseForRequest } from "./supabase";
+import { fetchAll, supabaseForRequest } from "./supabase";
 
 /* Data for the screens where managers set up classes, subjects and grading. */
 
@@ -64,7 +64,7 @@ export const getEditableStructure = cache(async (school: School): Promise<School
     supabase.from("class_arms").select("id, class_level_id, name").eq("school_id", school.id).order("name"),
     supabase.from("class_subjects").select("class_level_id, subject_id, sort_order").eq("school_id", school.id).order("sort_order"),
     supabase.from("subjects").select("id, name").eq("school_id", school.id).eq("is_active", true).order("name"),
-    supabase.from("students").select("class_arm_id").eq("school_id", school.id).eq("status", "active"),
+    fetchAll<{ class_arm_id: string | null }>((a, b) => supabase.from("students").select("class_arm_id").eq("school_id", school.id).eq("status", "active").order("id").range(a, b)),
   ]);
   for (const [what, r] of [["sections", sections], ["classes", levels], ["arms", arms], ["class subjects", classSubjects], ["subjects", subjects], ["students", students]] as const) {
     if (r.error) fail(what, r.error);

@@ -156,3 +156,55 @@ export async function importStudents(rows: unknown, updateExisting: boolean): Pr
   const r = data as { created: number; updated: number; skipped: number; guardians: number };
   return { ok: "Import finished.", ...r };
 }
+
+/** Moves ticked students to another class. Their past results keep their old class. */
+export async function moveStudents(input: { studentIds: string[]; armId: string }): Promise<ActionState> {
+  const access = await managerContext();
+  if ("error" in access) return access.error;
+  const { school, supabase } = access.ctx;
+  const parsed = z.object({ studentIds: z.array(z.uuid()).min(1).max(1000), armId: z.uuid() }).safeParse(input);
+  if (!parsed.success) return { error: "Tick at least one student and choose a class." };
+
+  const { data, error } = await supabase
+    .from("students")
+    .update({ class_arm_id: parsed.data.armId })
+    .eq("school_id", school.id)
+    .in("id", parsed.data.studentIds)
+    .select("id");
+  if (error) return friendly(error, "class");
+  revalidatePath("/students");
+  revalidatePath("/results", "layout");
+  const n = data?.length ?? 0;
+  return { ok: `${n} ${n === 1 ? "student" : "students"} moved.` };
+}
+
+const promoteInput = z.object({
+  fromSession: z.string().min(1).max(20),
+  moves: z
+    .array(
+      z.discriminatedUnion("action", [
+        z.object({ studentId: z.uuid(), action: z.literal("move"), armId: z.uuid() }),
+        z.object({ studentId: z.uuid(), action: z.enum(["stay", "graduate", "withdraw"]) }),
+      ]),
+    )
+    .min(1)
+    .max(5000),
+});
+
+export type PromoteResult = ActionState & { summary?: { moved: number; stayed: number; graduated: number; withdrawn: number } };
+
+/** Moves the whole school into the next session in one step: all or nothing. */
+export async function promoteStudents(input: z.infer<typeof promoteInput>): Promise<PromoteResult> {
+  const access = await managerContext();
+  if ("error" in access) return access.error;
+  const { school, supabase } = access.ctx;
+  const parsed = promoteInput.safeParse(input);
+  if (!parsed.success) return { error: "Some choices couldn't be read. Refresh the page and try again." };
+
+  const { data, error } = await supabase.rpc("promote_students", { p_school: school.id, p_from_session: parsed.data.fromSession, p_moves: parsed.data.moves });
+  if (error) return friendly(error, "promotion");
+  revalidatePath("/students", "layout");
+  revalidatePath("/results", "layout");
+  revalidatePath("/dashboard");
+  return { ok: "Students promoted.", summary: data as PromoteResult["summary"] };
+}

@@ -279,7 +279,29 @@ await as(u(4), async () => {
 await as(u(1), async () => {
   check("admin writes the head's comment", await refusedTo(`update public.term_reports set head_comment = 'Promoted' where student_id = '${ADA}'`), false);
   check("a CA with scores can't be removed", await refusedTo(`delete from public.assessment_components where id = '${R.comp}'`), true);
-  check("admin publishes the class", await refusedTo(`insert into public.result_releases (school_id, term_id, class_arm_id) values ('${A}', '${R.term}', '${R.arm}')`), false);
+  const publish = `insert into public.result_releases (school_id, term_id, class_arm_id) values ('${A}', '${R.term}', '${R.arm}')`;
+  check("publishing is locked until KMF's invoice for the term exists", await refusedTo(publish), true);
+  check("school admin cannot create their own invoice", await refusedTo(`insert into public.invoices (school_id, session_id, term_id, label, amount, due_on) select '${A}', session_id, id, 'x', 0, current_date + 30 from public.terms where id = '${R.term}'`), true);
+  check("school admin cannot switch to the free plan", (await db.query(`update public.billing_plans set plan = 'free' where school_id = '${A}' returning plan`)).rows.length, 0);
+  check("school admin can see their billing plan", await count(`select count(*) n from public.billing_plans`), 1);
+});
+// KMF issues an invoice that is already overdue and unpaid.
+await db.exec(`insert into public.invoices (school_id, session_id, term_id, label, amount, due_on) select '${A}', session_id, id, 'Term', 400000, current_date - 1 from public.terms where id = '${R.term}'`);
+await as(u(1), async () => {
+  const publish = `insert into public.result_releases (school_id, term_id, class_arm_id) values ('${A}', '${R.term}', '${R.arm}')`;
+  check("an overdue unpaid invoice keeps publishing locked", await refusedTo(publish), true);
+});
+await db.exec(`update public.invoices set due_on = current_date + 7 where school_id = '${A}'`);
+await as(u(1), async () => {
+  check("within the grace period, publishing works", await refusedTo(`insert into public.result_releases (school_id, term_id, class_arm_id) values ('${A}', '${R.term}', '${R.arm}')`), false);
+  await db.exec(`delete from public.result_releases where class_arm_id = '${R.arm}'`);
+});
+await db.exec(`update public.invoices set status = 'paid', paid_at = now() where school_id = '${A}'`);
+await as(u(4), async () => {
+  check("another school cannot see this school's invoices", await count(`select count(*) n from public.invoices`), 0);
+});
+await as(u(1), async () => {
+  check("admin publishes the class once paid", await refusedTo(`insert into public.result_releases (school_id, term_id, class_arm_id) values ('${A}', '${R.term}', '${R.arm}')`), false);
   check("published results are locked, even for the admin", await refusedTo(score(ADA, R.math, 15)), true);
 });
 await as(u(2), async () => {
@@ -303,6 +325,34 @@ await as(u(1), async () => {
 await as(u(3), async () => {
   check("unpublished results are hidden from parents again", await count(`select count(*) n from public.scores`), 0);
   check("class figures are hidden again too", await refusedTo(`select * from public.class_scores_for_report('${R.term}', '${R.arm}', '${ADA}')`), true);
+});
+
+
+// ---------------------------------------------------------------- Promotion and search
+await as(u(1), async () => {
+  const avg = await db.query(`select student_id, average from public.session_averages('${A}', (select session_id from public.terms where id = '${R.term}'))`);
+  check("session averages cover students with scores", avg.rows.length >= 1, true);
+});
+await as(u(3), async () => {
+  check("parents get no class-wide averages", await count(`select count(*) n from public.session_averages('${A}', (select session_id from public.terms where id = '${R.term}'))`), 0);
+});
+await as(u(2), async () => {
+  check("teachers cannot promote students", await refusedTo(`select public.promote_students('${A}', '2026/2027', '[{"studentId":"${OTHER}","action":"graduate"}]'::jsonb)`), true);
+});
+await as(u(1), async () => {
+  const r = await one(`select public.promote_students('${A}', '2026/2027', '[{"studentId":"${OTHER}","action":"move","armId":"${R.arm}"},{"studentId":"${BELLO}","action":"stay"}]'::jsonb) as r`);
+  check("admin promotes students in one step", r.r, { moved: 1, stayed: 1, graduated: 0, withdrawn: 0 });
+  check("the moved student is in the new class", await names(`select class_arm_id from public.students where id = '${OTHER}'`), [R.arm]);
+  check("a move into another school's class is refused", await refusedTo(`select public.promote_students('${A}', '2026/2027', '[{"studentId":"${OTHER}","action":"move","armId":"00000000-0000-4000-8000-0000000000ff"}]'::jsonb)`), true);
+  check("promotion leaves no half-done changes after an error", await names(`select class_arm_id from public.students where id = '${OTHER}'`), [R.arm]);
+});
+await as(u(4), async () => {
+  check("another school's admin cannot promote these students", (await one(`select public.promote_students('${B}', 'x', '[{"studentId":"${OTHER}","action":"graduate"}]'::jsonb) as r`)).r.graduated, 0);
+});
+await as(null, async () => {
+  check("visitors find a live school by part of its name", await names(`select name from public.find_schools('hills')`), ["Hillside College"]);
+  check("searches under 3 letters return nothing", await count(`select count(*) n from public.find_schools('hi')`), 0);
+  check("search results show no private details", (await db.query(`select * from public.find_schools('hills')`)).fields.map((f) => f.name), ["slug", "name", "address", "logo_path", "brand_color"]);
 });
 
 // Integrity: a class arm cannot point at another school's class level.

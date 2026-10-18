@@ -12,7 +12,7 @@ import {
   type TermReport,
   type Trait,
 } from "./results";
-import { supabaseForRequest } from "./supabase";
+import { fetchAll, supabaseForRequest } from "./supabase";
 
 /** Everything printed on one report card. */
 export type ReportCardData = {
@@ -109,7 +109,9 @@ export async function ownReportCard(school: School, cls: ClassInfo, term: TermOp
   let result: StudentResult | null = null;
   let classSize = 0;
   if (cls.style === "score") {
-    const { data: rows, error } = await supabase.rpc("class_scores_for_report", { p_term: term.id, p_arm: cls.id, p_student: studentId });
+    const { data: rows, error } = await fetchAll<{ student_key: string; subject_id: string; component_id: string; score: number }>((a, b) =>
+      supabase.rpc("class_scores_for_report", { p_term: term.id, p_arm: cls.id, p_student: studentId }).order("student_key").order("subject_id").order("component_id").range(a, b),
+    );
     if (error) return null;
     const scores: Record<string, Record<string, ScoreMap>> = {};
     for (const r of (rows ?? []) as Array<{ student_key: string; subject_id: string; component_id: string; score: number }>) {

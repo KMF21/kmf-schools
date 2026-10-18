@@ -11,6 +11,8 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { getSchoolDetail, platformAddress, schoolPortalLink } from "@/lib/platform";
 import { addDomain, markDomainWorking, removeDomain, setSchoolStatus } from "../../../actions";
 import { StatusBadge } from "../../status-badge";
+import { getBilling } from "@/lib/billing";
+import { BillingCard } from "./billing-card";
 import { ManagerForm } from "./manager-form";
 import { ResetManager } from "./reset-manager";
 
@@ -21,7 +23,7 @@ export default async function AdminSchoolPage({ params }: { params: Promise<{ id
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const school = await getSchoolDetail(id);
   if (!school) notFound();
-  const portal = await schoolPortalLink(school.slug);
+  const [portal, billing] = await Promise.all([schoolPortalLink(school.slug), getBilling(school.id)]);
 
   return (
     <div className="space-y-4">
@@ -62,6 +64,8 @@ export default async function AdminSchoolPage({ params }: { params: Promise<{ id
           </SubmitButton>
         </ActionForm>
       </Card>
+
+      <BillingCard schoolId={school.id} plan={billing.plan} invoices={billing.invoices} activeStudents={school.students} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, GraduationCap, Plus, School, Signal } from "lucide-react";
-import { Card, CardHeader, EmptyState, StatTile, buttonClasses } from "@kmf/ui";
+import { ArrowUpRight, GraduationCap, Plus, Receipt, School, Signal } from "lucide-react";
+import { Badge, Card, CardHeader, EmptyState, StatTile, buttonClasses } from "@kmf/ui";
 import { SchoolMark } from "@/components/school-mark";
-import { formatNumber } from "@/lib/format";
+import { formatNaira, formatNumber } from "@/lib/format";
 import { listSchools, platformAddress, schoolPortalLink } from "@/lib/platform";
 import { StatusBadge } from "./status-badge";
 
@@ -14,13 +14,15 @@ export default async function AdminHome() {
   const links = await Promise.all(schools.map((s) => schoolPortalLink(s.slug)));
   const live = schools.filter((s) => s.status === "active").length;
   const students = schools.reduce((n, s) => n + s.students, 0);
+  const owed = schools.reduce((n, s) => n + (s.billing.status === "unpaid" ? (s.billing.amount ?? 0) : 0), 0);
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Schools" value={formatNumber(schools.length)} icon={<School />} />
         <StatTile label="Live" value={formatNumber(live)} note={`${formatNumber(schools.length - live)} setting up or suspended`} icon={<Signal />} tone="ok" />
         <StatTile label="Active students" value={formatNumber(students)} icon={<GraduationCap />} tone="info" />
+        <StatTile label="Unpaid invoices" value={formatNaira(owed)} note={`${schools.filter((s) => s.billing.overdue).length} overdue`} icon={<Receipt />} tone="warn" />
       </div>
 
       <Card className="overflow-hidden">
@@ -50,6 +52,17 @@ export default async function AdminHome() {
                 </div>
                 <span className="text-sm text-ink-muted tabular-nums">{formatNumber(s.students)} students</span>
                 <StatusBadge status={s.status} />
+                {s.billing.plan === "free" ? (
+                  <Badge>Free plan</Badge>
+                ) : s.billing.status === "paid" || s.billing.status === "waived" ? (
+                  <Badge tone="ok">Paid</Badge>
+                ) : s.billing.status === "unpaid" ? (
+                  <Badge tone={s.billing.overdue ? "bad" : "warn"}>
+                    {s.billing.overdue ? "Overdue" : "Unpaid"} {formatNaira(s.billing.amount)}
+                  </Badge>
+                ) : (
+                  <Badge tone="warn">No invoice</Badge>
+                )}
                 {s.status === "suspended" ? null : (
                   <a href={links[i]} className={buttonClasses("outline", "sm")}>
                     Open portal <ArrowUpRight className="size-4" aria-hidden />

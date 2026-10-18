@@ -237,3 +237,146 @@ export async function resetManagerPassword(_prev: AdminState, form: FormData): P
   if (error) return friendly(error, "password");
   return { ok: "New password created.", login: { name: member.display_name, login: displayLogin(user.user.email), password } };
 }
+
+/* -------------------------------------------------------------- Billing */
+
+const planInput = z.object({
+  plan: z.enum(["per_student", "yearly", "free"]),
+  rate: z.coerce.number().min(0).max(1_000_000),
+  minimum_students: z.coerce.number().int().min(0).max(100_000),
+  yearly_amount: z.coerce.number().min(0).max(1_000_000_000),
+  grace_days: z.coerce.number().int().min(0).max(120),
+});
+
+export async function saveBillingPlan(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  const parsed = planInput.safeParse({
+    plan: form.get("plan"),
+    rate: form.get("rate"),
+    minimum_students: form.get("minimum_students"),
+    yearly_amount: form.get("yearly_amount"),
+    grace_days: form.get("grace_days"),
+  });
+  if (!schoolId.success || !parsed.success) return { error: "Check the amounts. Use numbers only, without commas." };
+  const { error } = await ctx.supabase
+    .from("billing_plans")
+    .upsert({ school_id: schoolId.data, ...parsed.data, notes: text(form, "notes"), updated_at: new Date().toISOString() }, { onConflict: "school_id" });
+  if (error) return friendly(error, "billing plan");
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  revalidatePath("/admin");
+  return { ok: "Billing plan saved." };
+}
+
+function lagosToday(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(d);
+}
+
+/** Issues the invoice for the school's current term (or session, on the yearly plan). */
+export async function createInvoice(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const { supabase } = ctx;
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  if (!schoolId.success) return { error: "That school couldn't be found." };
+
+  const [{ data: plan }, { data: term }, { count }] = await Promise.all([
+    supabase.from("billing_plans").select("plan, rate, minimum_students, yearly_amount, grace_days").eq("school_id", schoolId.data).maybeSingle(),
+    supabase.from("terms").select("id, name, session_id, academic_sessions(name)").eq("school_id", schoolId.data).eq("is_current", true).maybeSingle(),
+    supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", schoolId.data).eq("status", "active"),
+  ]);
+  if (!plan) return { error: "Set the school's billing plan first." };
+  if (plan.plan === "free") return { error: "This school is on the free plan, so there's nothing to invoice." };
+  if (!term) return { error: "The school hasn't set its current term yet. Ask them to set it under School settings, Session and term." };
+  const session = (term.academic_sessions as unknown as { name: string } | null)?.name ?? "";
+
+  const yearly = plan.plan === "yearly";
+  const students = count ?? 0;
+  const billed = Math.max(students, plan.minimum_students);
+  const row = {
+    school_id: schoolId.data,
+    session_id: term.session_id,
+    term_id: yearly ? null : term.id,
+    label: yearly ? `Session ${session}` : `${term.name}, ${session}`,
+    student_count: yearly ? students : billed,
+    rate: yearly ? null : Number(plan.rate),
+    amount: yearly ? Number(plan.yearly_amount) : billed * Number(plan.rate),
+    due_on: lagosToday(plan.grace_days),
+  };
+  const { error } = await supabase.from("invoices").insert(row);
+  if (error) {
+    if (error.code === "23505") return { error: `There's already an invoice for ${row.label}.` };
+    return friendly(error, "invoice");
+  }
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  revalidatePath("/admin");
+  return { ok: `Invoice for ${row.label} created.` };
+}
+
+/** Updates an unpaid term invoice to the school's current number of active students. */
+export async function recountInvoice(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const { supabase } = ctx;
+  const id = z.uuid().safeParse(form.get("invoice_id"));
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  if (!id.success || !schoolId.success) return { error: "That invoice couldn't be found." };
+  const [{ data: inv }, { data: plan }, { count }] = await Promise.all([
+    supabase.from("invoices").select("term_id, status").eq("id", id.data).eq("school_id", schoolId.data).maybeSingle(),
+    supabase.from("billing_plans").select("rate, minimum_students").eq("school_id", schoolId.data).maybeSingle(),
+    supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", schoolId.data).eq("status", "active"),
+  ]);
+  if (!inv || !plan) return { error: "That invoice couldn't be found." };
+  if (inv.status !== "unpaid" || !inv.term_id) return { error: "Only unpaid term invoices can be recounted." };
+  const billed = Math.max(count ?? 0, plan.minimum_students);
+  const { error } = await supabase.from("invoices").update({ student_count: billed, rate: plan.rate, amount: billed * Number(plan.rate) }).eq("id", id.data);
+  if (error) return friendly(error, "invoice");
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  return { ok: "Invoice updated to the current number of students." };
+}
+
+export async function setInvoiceStatus(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const id = z.uuid().safeParse(form.get("invoice_id"));
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  const status = z.enum(["paid", "waived", "unpaid"]).safeParse(form.get("status"));
+  if (!id.success || !schoolId.success || !status.success) return { error: "That invoice couldn't be found." };
+  const patch =
+    status.data === "unpaid"
+      ? { status: "unpaid", paid_at: null, payment_note: null }
+      : { status: status.data, paid_at: new Date().toISOString(), payment_note: text(form, "note") };
+  const { error } = await ctx.supabase.from("invoices").update(patch).eq("id", id.data).eq("school_id", schoolId.data);
+  if (error) return friendly(error, "invoice");
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  revalidatePath("/admin");
+  return { ok: status.data === "paid" ? "Marked as paid. The school can publish results." : status.data === "waived" ? "Waived. The school can publish results." : "Marked as unpaid." };
+}
+
+export async function extendInvoice(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const id = z.uuid().safeParse(form.get("invoice_id"));
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  const days = z.coerce.number().int().min(1).max(90).safeParse(form.get("days"));
+  if (!id.success || !schoolId.success || !days.success) return { error: "Choose how many days to extend by." };
+  const { error } = await ctx.supabase.from("invoices").update({ due_on: lagosToday(days.data) }).eq("id", id.data).eq("school_id", schoolId.data).eq("status", "unpaid");
+  if (error) return friendly(error, "invoice");
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  return { ok: `Due date moved to ${days.data} days from today.` };
+}
+
+export async function deleteInvoice(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await platformContext();
+  if ("error" in ctx) return ctx.error;
+  const id = z.uuid().safeParse(form.get("invoice_id"));
+  const schoolId = z.uuid().safeParse(form.get("school_id"));
+  if (!id.success || !schoolId.success) return { error: "That invoice couldn't be found." };
+  const { error } = await ctx.supabase.from("invoices").delete().eq("id", id.data).eq("school_id", schoolId.data).eq("status", "unpaid");
+  if (error) return friendly(error, "invoice");
+  revalidatePath(`/admin/schools/${schoolId.data}`);
+  revalidatePath("/admin");
+  return { ok: "Invoice deleted." };
+}

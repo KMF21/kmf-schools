@@ -14,7 +14,7 @@ import { IS_DEMO, publicAssetUrl } from "./env";
 import { DEMO_STAFF, getArmOptions } from "./people";
 import type { Viewer } from "./session";
 import { getEditableStructure, getGrading } from "./structure";
-import { supabaseForRequest } from "./supabase";
+import { fetchAll, supabaseForRequest } from "./supabase";
 
 /* Everything the results screens read. Totals and positions are worked out in @kmf/core. */
 
@@ -235,7 +235,9 @@ export const getClassInfo = cache(async (school: School, armId: string): Promise
 const getSchoolPeople = cache(async (school: School) => {
   const supabase = await supabaseForRequest();
   const [students, arms, assignments, staff] = await Promise.all([
-    supabase.from("students").select("id, class_arm_id, admission_no, first_name, middle_name, last_name, gender").eq("school_id", school.id).eq("status", "active").not("class_arm_id", "is", null).order("last_name").order("first_name"),
+    fetchAll<{ id: string; class_arm_id: string; admission_no: string; first_name: string; middle_name: string | null; last_name: string; gender: "male" | "female" | null }>((a, b) =>
+      supabase.from("students").select("id, class_arm_id, admission_no, first_name, middle_name, last_name, gender").eq("school_id", school.id).eq("status", "active").not("class_arm_id", "is", null).order("last_name").order("first_name").order("id").range(a, b),
+    ),
     supabase.from("class_arms").select("id, form_teacher_id").eq("school_id", school.id),
     supabase.from("teaching_assignments").select("class_arm_id, subject_id, staff_id").eq("school_id", school.id),
     supabase.from("staff").select("id, title, first_name, last_name").eq("school_id", school.id),
@@ -349,9 +351,15 @@ export const getClassTermData = cache(async (school: School, cls: ClassInfo, ter
   if (IS_DEMO) return demoClassData(cls, term);
   const supabase = await supabaseForRequest();
   const [scores, ratings, reports, release] = await Promise.all([
-    supabase.from("scores").select("student_id, subject_id, component_id, score").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id),
-    supabase.from("ratings").select("student_id, subject_id, rating").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id),
-    supabase.from("term_reports").select("student_id, days_present, teacher_comment, head_comment, traits").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id),
+    fetchAll<{ student_id: string; subject_id: string; component_id: string; score: number }>((a, b) =>
+      supabase.from("scores").select("student_id, subject_id, component_id, score").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id).order("student_id").order("subject_id").order("component_id").range(a, b),
+    ),
+    fetchAll<{ student_id: string; subject_id: string; rating: string }>((a, b) =>
+      supabase.from("ratings").select("student_id, subject_id, rating").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id).order("student_id").order("subject_id").range(a, b),
+    ),
+    fetchAll<{ student_id: string; days_present: number | null; teacher_comment: string | null; head_comment: string | null; traits: unknown }>((a, b) =>
+      supabase.from("term_reports").select("student_id, days_present, teacher_comment, head_comment, traits").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id).order("student_id").range(a, b),
+    ),
     supabase.from("result_releases").select("published_at").eq("school_id", school.id).eq("term_id", term.id).eq("class_arm_id", cls.id).maybeSingle(),
   ]);
   for (const [what, r] of [["scores", scores], ["ratings", ratings], ["reports", reports], ["publishing status", release]] as const) if (r.error) fail(what, r.error);
@@ -375,12 +383,19 @@ export async function getEarlierTermTotals(school: School, cls: ClassInfo, term:
 
   const supabase = await supabaseForRequest();
   const ids = cls.students.map((s) => s.id);
-  const { data, error } = await supabase
-    .from("scores")
-    .select("term_id, student_id, subject_id, score")
-    .eq("school_id", school.id)
-    .in("term_id", earlier.map((t) => t.id))
-    .in("student_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+  const { data, error } = await fetchAll<{ term_id: string; student_id: string; subject_id: string; score: number }>((a, b) =>
+    supabase
+      .from("scores")
+      .select("term_id, student_id, subject_id, component_id, score")
+      .eq("school_id", school.id)
+      .in("term_id", earlier.map((t) => t.id))
+      .in("student_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+      .order("term_id")
+      .order("student_id")
+      .order("subject_id")
+      .order("component_id")
+      .range(a, b),
+  );
   if (error) fail("earlier terms", error);
   const totals: Record<string, Record<string, Array<number | null>>> = {};
   for (const r of data ?? []) {

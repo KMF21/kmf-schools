@@ -9,6 +9,7 @@ const TABS = [
   { href: "/settings/calendar", label: "Session and term" },
   { href: "/settings/grading", label: "Grading" },
   { href: "/settings/reports", label: "Report cards" },
+  { href: "/settings/billing", label: "Billing" },
 ];
 
 export function SettingsTabs() {

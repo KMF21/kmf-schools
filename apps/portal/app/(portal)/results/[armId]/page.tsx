@@ -6,7 +6,8 @@ import { computeClassResults, ordinal } from "@kmf/core";
 import { Badge, Card, CardHeader, buttonClasses } from "@kmf/ui";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/form-bits";
-import { formatDate } from "@/lib/format";
+import { getPublishStatus } from "@/lib/billing";
+import { formatDate, formatNaira } from "@/lib/format";
 import { getStaffList } from "@/lib/people";
 import { getClassTermData } from "@/lib/results";
 import { publishClass, unpublishClass } from "../actions";
@@ -19,10 +20,13 @@ export const metadata: Metadata = { title: "Class results" };
 export default async function ClassResultsPage({ params, searchParams }: { params: Promise<{ armId: string }>; searchParams: Promise<{ term?: string }> }) {
   const { armId } = await params;
   const { term: termParam } = await searchParams;
-  const { school, cls, term, terms, access } = await loadClass(armId, termParam);
+  const { school, viewer, cls, term, terms, access } = await loadClass(armId, termParam);
   if (!access.manage && !access.formTeacher && access.subjectIds.length === 0) redirect("/results");
 
-  const data = await getClassTermData(school, cls, term);
+  const [data, billing] = await Promise.all([
+    getClassTermData(school, cls, term),
+    access.manage ? getPublishStatus(school, term, viewer.isPlatformAdmin) : Promise.resolve(null),
+  ]);
   const q = `?term=${term.id}`;
   const published = Boolean(data.release);
   const canSeeAll = access.manage || access.formTeacher;
@@ -82,7 +86,12 @@ export default async function ClassResultsPage({ params, searchParams }: { param
             <Link href={`/results/${cls.id}/print${q}`} className={buttonClasses("outline", "sm")}>
               <Printer className="size-4" aria-hidden /> Report cards
             </Link>
-            {access.manage ? (
+            {access.manage && !published && billing && !billing.allowed ? (
+              <p className="ml-auto flex basis-full items-start gap-2 rounded-[var(--radius-control)] bg-warn-soft px-3 py-2 text-sm font-semibold text-warn sm:basis-auto">
+                <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {billing.message}
+              </p>
+            ) : access.manage ? (
               published ? (
                 <ActionForm action={unpublishClass} hidden={{ term_id: term.id, arm_id: cls.id }} confirm="Unpublish these results? Parents and students won't see them until you publish again." className="ml-auto flex flex-wrap items-center gap-2">
                   <SubmitButton variant="outline" size="sm" pendingLabel="Unpublishing">
@@ -98,6 +107,12 @@ export default async function ClassResultsPage({ params, searchParams }: { param
               )
             ) : null}
           </div>
+        ) : null}
+        {access.manage && !published && billing?.allowed && billing.invoice?.status === "unpaid" ? (
+          <p className="border-t border-line px-5 py-3 text-sm text-ink-muted sm:px-6">
+            KMF invoice for {billing.invoice.label}: <span className="font-bold text-ink">{formatNaira(billing.invoice.amount)}</span>, due {formatDate(billing.invoice.dueOn)}. Publishing
+            stays open until then.
+          </p>
         ) : null}
       </Card>
 

@@ -31,3 +31,9 @@ export function greetingName(name: string): string {
   if (titled && parts.length > 1) return `${parts[0]} ${parts[parts.length - 1]}`;
   return parts[0] ?? name;
 }
+
+/** ₦680,000 */
+export function formatNaira(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) return "–";
+  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
+}

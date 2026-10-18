@@ -52,11 +52,13 @@ export type SchoolSummary = {
   createdAt: string;
   students: number;
   domains: string[];
+  /** Latest invoice, for the list of schools. */
+  billing: { plan: string; label: string | null; status: "unpaid" | "paid" | "waived" | null; overdue: boolean; amount: number | null };
 };
 
 export type SchoolDomain = { hostname: string; kind: "portal" | "website"; isPrimary: boolean; verifiedAt: string | null };
 export type SchoolPerson = { userId: string; name: string; role: string };
-export type SchoolDetail = SchoolSummary & { shortName: string | null; email: string | null; phone: string | null; domainRows: SchoolDomain[]; managers: SchoolPerson[] };
+export type SchoolDetail = Omit<SchoolSummary, "billing"> & { shortName: string | null; email: string | null; phone: string | null; domainRows: SchoolDomain[]; managers: SchoolPerson[] };
 
 const DEMO_SUMMARY: SchoolSummary = {
   id: DEMO_SCHOOL.id,
@@ -68,6 +70,7 @@ const DEMO_SUMMARY: SchoolSummary = {
   createdAt: "2026-09-01T09:00:00Z",
   students: DEMO_STUDENTS.length,
   domains: ["portal.brightfield.example"],
+  billing: { plan: "per_student", label: "First term, 2026/2027", status: "paid", overdue: false, amount: 680000 },
 };
 
 type SchoolRow = { id: string; slug: string; name: string; short_name: string | null; email: string | null; phone: string | null; brand_color: string; logo_path: string | null; status: SchoolStatus; created_at: string };
@@ -75,10 +78,13 @@ type SchoolRow = { id: string; slug: string; name: string; short_name: string | 
 export async function listSchools(): Promise<SchoolSummary[]> {
   if (IS_DEMO) return [DEMO_SUMMARY];
   const supabase = await supabaseForRequest();
-  const [{ data: schools, error }, { data: domains }] = await Promise.all([
+  const [{ data: schools, error }, { data: domains }, { data: plans }, { data: invoices }] = await Promise.all([
     supabase.from("schools").select("id, slug, name, short_name, email, phone, brand_color, logo_path, status, created_at").order("name"),
     supabase.from("school_domains").select("hostname, school_id").order("hostname"),
+    supabase.from("billing_plans").select("school_id, plan"),
+    supabase.from("invoices").select("school_id, label, status, amount, due_on, created_at").order("created_at", { ascending: false }).limit(1000),
   ]);
+  const todayLagos = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
   if (error) throw new Error(`Could not load schools: ${error.message}`);
   const rows = (schools ?? []) as SchoolRow[];
   // One small count per school: fine for the tens of schools KMF expects.
@@ -98,14 +104,27 @@ export async function listSchools(): Promise<SchoolSummary[]> {
     createdAt: s.created_at,
     students: counts[i]!,
     domains: (domains ?? []).filter((d) => d.school_id === s.id).map((d) => d.hostname),
+    billing: (() => {
+      const plan = (plans ?? []).find((p) => p.school_id === s.id)?.plan ?? "per_student";
+      const inv = (invoices ?? []).find((x) => x.school_id === s.id);
+      return {
+        plan,
+        label: inv?.label ?? null,
+        status: inv?.status ?? null,
+        overdue: Boolean(inv && inv.status === "unpaid" && inv.due_on < todayLagos),
+        amount: inv ? Number(inv.amount) : null,
+      };
+    })(),
   }));
 }
 
 export async function getSchoolDetail(id: string): Promise<SchoolDetail | null> {
   if (IS_DEMO) {
     if (id !== DEMO_SCHOOL.id) return null;
+    const { billing: _billing, ...demo } = DEMO_SUMMARY;
+    void _billing;
     return {
-      ...DEMO_SUMMARY,
+      ...demo,
       shortName: DEMO_SCHOOL.shortName,
       email: DEMO_SCHOOL.email,
       phone: DEMO_SCHOOL.phone,

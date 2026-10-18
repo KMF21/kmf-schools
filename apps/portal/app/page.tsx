@@ -4,6 +4,7 @@ import { Eyebrow, buttonClasses } from "@kmf/ui";
 import { IS_DEMO, ROOT_DOMAIN } from "@/lib/env";
 import { getViewer } from "@/lib/session";
 import { getTenant } from "@/lib/tenant";
+import { SchoolFinder } from "./school-finder";
 
 const KMF_WHATSAPP = "https://wa.me/2349110137795";
 
@@ -61,11 +62,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
           <p className="mx-auto mt-5 max-w-xl text-lg text-white/85">
             One portal for proprietors, teachers, parents and students. Built by KMF Enterprise in Jalingo, for schools across Nigeria.
           </p>
-          <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <a href={demoUrl} className={buttonClasses("solid", "lg", "bg-white text-brand hover:bg-white/90 shadow-none")}>
+          <div className="mt-9">
+            <SchoolFinder rootDomain={ROOT_DOMAIN} onPlatformDomain={onPlatformDomain} />
+          </div>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <a href={demoUrl} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-7 text-base font-semibold text-neutral-900 transition-colors hover:bg-white/90">
               See the demo school <ArrowUpRight className="size-5" aria-hidden />
             </a>
-            <a href="https://www.kmfenterprise.ng/" className={buttonClasses("outline", "lg", "border-white/45 bg-transparent text-white hover:bg-white/10 hover:border-white")}>
+            <a href="https://www.kmfenterprise.ng/" className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/45 px-7 text-base font-semibold text-white transition-colors hover:border-white hover:bg-white/10">
               About KMF Enterprise
             </a>
           </div>
