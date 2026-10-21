@@ -19,11 +19,8 @@ await db.exec(`
 for (const file of readdirSync(`${repo}/supabase/migrations`).filter((f) => f.endsWith(".sql") && !f.includes("storage")).sort()) {
   await db.exec(readFileSync(`${repo}/supabase/migrations/${file}`, "utf8"));
 }
-await db.exec(`
-  grant usage on schema public to anon, authenticated;
-  grant select, insert, update, delete on all tables in schema public to authenticated;
-  grant select on all tables in schema public to anon;
-`);
+// Like Supabase after 30 October 2026: tables get no access unless a migration grants it.
+await db.exec(`grant usage on schema public to anon, authenticated, service_role;`);
 await db.exec(readFileSync(`${repo}/supabase/seed.sql`, "utf8"));
 console.log("migration + seed: ok");
 
@@ -215,7 +212,7 @@ await as(null, async () => {
   check("signed-out visitor resolves school by domain", await names("select name from public.resolve_school('portal.hillside.com.ng', null)"), ["Hillside College"]);
   check("unknown domain resolves to nothing", await count("select count(*) n from public.resolve_school('nope.example', null)"), 0);
   check("signed-out visitor sees only public announcements", await count("select count(*) n from public.announcements"), 1);
-  check("signed-out visitor cannot read students", await count("select count(*) n from public.students"), 0);
+  check("signed-out visitor cannot read students", await refusedTo("select count(*) n from public.students"), true);
 });
 
 
@@ -354,6 +351,22 @@ await as(null, async () => {
   check("searches under 3 letters return nothing", await count(`select count(*) n from public.find_schools('hi')`), 0);
   check("search results show no private details", (await db.query(`select * from public.find_schools('hills')`)).fields.map((f) => f.name), ["slug", "name", "address", "logo_path", "brand_color"]);
 });
+
+// Every table must have its access granted in a migration.
+const ungranted = (await db.query(`
+  select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r'
+    and not (has_table_privilege('authenticated', c.oid, 'select') and has_table_privilege('service_role', c.oid, 'select'))
+  order by 1`)).rows.map((r) => r.relname);
+check("every table has its access granted in a migration", ungranted, []);
+const anonTables = (await db.query(`
+  select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and has_table_privilege('anon', c.oid, 'select') order by 1`)).rows.map((r) => r.relname);
+check("signed-out visitors can only read announcements directly", anonTables, ["announcements"]);
+const noRls = (await db.query(`
+  select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity order by 1`)).rows.map((r) => r.relname);
+check("every table has row level security on", noRls, []);
 
 // Integrity: a class arm cannot point at another school's class level.
 let crossBlocked = false;
